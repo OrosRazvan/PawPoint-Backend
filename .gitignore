@@ -1,0 +1,13 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build
+bin/
+obj/
+
+# alte chestii locale
+*.db
+*.db-shm
+*.db-wal
