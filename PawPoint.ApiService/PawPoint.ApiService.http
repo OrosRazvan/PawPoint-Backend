@@ -1,0 +1,6 @@
+@PawPoint.ApiService_HostAddress = http://localhost:5113
+
+GET {{PawPoint.ApiService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

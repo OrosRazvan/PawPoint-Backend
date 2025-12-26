@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36804.6 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PawPoint.Tests", "PawPoint.Tests.csproj", "{6EB4040B-6A71-4724-91E0-A01E6F4A1CED}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6EB4040B-6A71-4724-91E0-A01E6F4A1CED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6EB4040B-6A71-4724-91E0-A01E6F4A1CED}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6EB4040B-6A71-4724-91E0-A01E6F4A1CED}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6EB4040B-6A71-4724-91E0-A01E6F4A1CED}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6D19603C-D291-45CD-94AA-D8EE58EB19FE}
+	EndGlobalSection
+EndGlobal
