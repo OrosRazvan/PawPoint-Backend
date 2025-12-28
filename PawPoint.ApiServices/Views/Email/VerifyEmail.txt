@@ -1,0 +1,10 @@
+Verify your email
+
+Hi {{FullName}},
+
+Please confirm your email address to finish setting up your Inspire account.
+
+Confirm here:
+{{VerifyLink}}
+
+If the link above doesn’t open, copy and paste it into your browser.

@@ -1,0 +1,124 @@
+@model IReadOnlyDictionary<string, string>
+@{
+    Layout = null;
+    Model.TryGetValue("FullName", out var fullName);
+    Model.TryGetValue("VerifyLink", out var link);
+    fullName ??= "";
+    link ??= "#";
+}
+<!doctype html>
+<html lang="en" style="margin:0;padding:0;">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Verify your email</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #f6f7f9;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        table {
+            border-collapse: collapse;
+        }
+
+        .wrapper {
+            width: 100%;
+            background: #f6f7f9;
+            padding: 24px 0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+        }
+
+        .header {
+            padding: 24px 24px 0 24px;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .title {
+            margin: 0;
+            font-size: 22px;
+            color: #111827;
+        }
+
+        .content {
+            padding: 16px 24px 24px 24px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 18px;
+            text-decoration: none;
+            border-radius: 6px;
+            background: #2563EB;
+            color: #ffffff !important;
+            font-weight: bold;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .muted {
+            color: #6b7280;
+            font-size: 12px;
+            margin-top: 12px;
+        }
+
+        .footer {
+            text-align: center;
+            color: #9ca3af;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+            padding: 16px;
+        }
+
+        a {
+            color: #2563EB;
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" class="wrapper" width="100%">
+        <tr>
+            <td align="center">
+                <table role="presentation" class="container">
+                    <tr>
+                        <td class="header">
+                            <h1 class="title">Verify your email</h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="content">
+                            <p>Hi @fullName,</p>
+                            <p>Please confirm your email address to finish setting up your Inspire account.</p>
+                            <p style="margin:20px 0;">
+                                <a class="btn" href="@link" target="_blank" rel="noopener">Confirm email</a>
+                            </p>
+                            <p class="muted">
+                                If the button doesn’t work, copy and paste this link into your browser:<br />
+                                <span style="word-break:break-all;">@link</span>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="footer">
+                            © @DateTime.UtcNow.Year Inspire
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
