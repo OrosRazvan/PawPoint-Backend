@@ -27,20 +27,35 @@ namespace PawPoint.ApiServices.Helpers
             var seedRecord = await database.SeedStatuses.FirstOrDefaultAsync();
             if (seedRecord == null)
             {
-                seedRecord = new SeedStatus { ShouldSeedDatabase = false };
+                // PRIMA dată când pornește aplicația pe DB-ul ăsta → vrem să SEED-uim
+                seedRecord = new SeedStatus { ShouldSeedDatabase = true };
                 database.SeedStatuses.Add(seedRecord);
                 await database.SaveChangesAsync();
             }
-            else if (!seedRecord.ShouldSeedDatabase)
+
+            // dacă flag-ul e false, nu mai seed-uim
+            if (!seedRecord.ShouldSeedDatabase)
             {
+                await SeedVetCabinets(database);
+                await database.SaveChangesAsync();
+
+                await SeedVetTimeSlots(database);
+                await database.SaveChangesAsync();
                 return;
             }
 
             await SeedNotificationPreferences(database);
             await SeedNotificationTypes(database);
             await SeedVerificationTokenTypes(database);
-            await SeedVetCabinets(database);
 
+            await SeedVetCabinets(database);
+            await database.SaveChangesAsync();   // ca să aibă Id-uri cabinetele
+
+            await SeedVetTimeSlots(database);
+            await database.SaveChangesAsync();
+
+            // după ce am seed-uit o dată, nu mai vrem să rulăm automat
+            seedRecord.ShouldSeedDatabase = false;
             await database.SaveChangesAsync();
         }
 
@@ -98,7 +113,96 @@ namespace PawPoint.ApiServices.Helpers
                 new() { Name = "Companion Care Clinic", Address = "Str. Someșului 13", City = "Cluj-Napoca", PhoneNumber="0744 230 113", Website="companioncare.ro", Rating = 4.8, DistanceKm = 3.8, BasePriceRon = 150 }
             };
 
-            await database.VetCabinets.AddRangeAsync(cabinets);
+            var existingNames = await database.VetCabinets
+                .Select(c => c.Name)
+                .ToListAsync();
+
+            var toInsert = cabinets
+                .Where(c => !existingNames.Contains(c.Name))
+                .ToList();
+
+            if (toInsert.Count > 0)
+            {
+                await database.VetCabinets.AddRangeAsync(toInsert);
+            }
+        }
+
+        private static async TaskThreading SeedVetTimeSlots(Context database)
+        {
+            const int MaxTotalSlots = 200;
+
+            // dacă avem deja 200 sau mai multe, nu mai facem nimic
+            var existingCount = await database.VetTimeSlots.CountAsync();
+            if (existingCount >= MaxTotalSlots)
+                return;
+
+            var cabinets = await database.VetCabinets.ToListAsync();
+            if (cabinets.Count == 0) return;
+
+            var rng = new Random();
+
+            // nu mai mergem 3 luni, ca să nu fie super risipit
+            var nowDate = DateTime.UtcNow.Date;
+            var endDate = nowDate.AddMonths(1);
+
+            var newSlots = new List<VetTimeSlot>();
+            var usedKeys = new HashSet<string>();
+
+            var totalSlots = existingCount; // de obicei 0 după ce ai șters
+
+            for (var date = nowDate; date < endDate && totalSlots < MaxTotalSlots; date = date.AddDays(1))
+            {
+                foreach (var cabinet in cabinets)
+                {
+                    if (totalSlots >= MaxTotalSlots)
+                        break;
+
+                    // ~50% din cabinete vor avea program în ziua asta
+                    if (rng.NextDouble() >= 0.5)
+                        continue;
+
+                    var slotsPerDay = rng.Next(1, 4); // 1–3 sloturi / cabinet / zi
+
+                    for (int i = 0; i < slotsPerDay && totalSlots < MaxTotalSlots; i++)
+                    {
+                        var hour = rng.Next(8, 18);        // 8–17
+                        var minute = rng.Next(0, 2) * 30;  // 0 sau 30
+
+                        var startLocal = new DateTime(
+                            date.Year, date.Month, date.Day,
+                            hour, minute, 0,
+                            DateTimeKind.Local);
+
+                        var startUtc = startLocal.ToUniversalTime();
+                        var endUtc = startUtc.AddMinutes(30);
+
+                        var key = $"{cabinet.Id}|{startUtc:o}";
+                        if (usedKeys.Contains(key))
+                            continue;
+
+                        usedKeys.Add(key);
+
+                        var capacity = rng.Next(1, 4);
+                        var booked = rng.Next(0, capacity + 1);
+
+                        newSlots.Add(new VetTimeSlot
+                        {
+                            VetCabinetId = cabinet.Id,
+                            StartTimeUtc = startUtc,
+                            EndTimeUtc = endUtc,
+                            Capacity = capacity,
+                            BookedCount = booked
+                        });
+
+                        totalSlots++;
+                    }
+                }
+            }
+
+            if (newSlots.Count > 0)
+            {
+                await database.VetTimeSlots.AddRangeAsync(newSlots);
+            }
         }
     }
 }
