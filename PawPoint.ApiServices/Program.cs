@@ -171,6 +171,7 @@ public class Program
         builder.Services.AddScoped<IProfilePictureUrlFactory, ProfilePictureUrlFactory>();
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<INotificationService, NotificationService>();;
+        builder.Services.AddScoped<IAnimalService, AnimalService>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());
