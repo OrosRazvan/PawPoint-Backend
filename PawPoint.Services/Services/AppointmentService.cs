@@ -7,14 +7,9 @@ using PawPoint.Services.Responses;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class AppointmentService : IAppointmentService
+    public sealed class AppointmentService(Context db) : IAppointmentService
     {
-        private readonly Context _db;
-
-        public AppointmentService(Context db)
-        {
-            _db = db;
-        }
+        private readonly Context _db = db;
 
         public async Task<IReadOnlyList<VetCabinetListItemResponse>> GetVetCabinetsAsync(
             string? serviceType,
