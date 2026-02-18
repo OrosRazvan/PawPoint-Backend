@@ -19,6 +19,8 @@ namespace PawPoint.DB.Entities
 
         public ICollection<Appointment> Appointments { get; set; } = [];
         public ICollection<Vaccination> Vaccinations { get; set; } = [];
+        public ICollection<Vaccination> Dewornings { get; set; } = [];
+
 
     }
 }
