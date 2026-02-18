@@ -134,10 +134,6 @@ namespace PawPoint.DB.Migrations
                     b.Property<int>("AnimalId")
                         .HasColumnType("integer");
 
-                    b.Property<string>("ClinicName")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
                     b.Property<DateTime>("Date")
                         .HasColumnType("timestamp with time zone");
 
@@ -151,14 +147,22 @@ namespace PawPoint.DB.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VetCabinetId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VetTimeSlotId")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AnimalId");
+
+                    b.HasIndex("VetCabinetId");
+
+                    b.HasIndex("VetTimeSlotId");
 
                     b.ToTable("Dewormings");
                 });
@@ -416,6 +420,12 @@ namespace PawPoint.DB.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<int>("VetCabinetId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("VetTimeSlotId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("VeterinarianName")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -423,6 +433,10 @@ namespace PawPoint.DB.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AnimalId");
+
+                    b.HasIndex("VetCabinetId");
+
+                    b.HasIndex("VetTimeSlotId");
 
                     b.ToTable("Vaccinations");
                 });
@@ -599,7 +613,23 @@ namespace PawPoint.DB.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PawPoint.DB.Entities.VetCabinet", "VetCabinet")
+                        .WithMany("Dewornings")
+                        .HasForeignKey("VetCabinetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PawPoint.DB.Entities.VetTimeSlot", "VetTimeSlot")
+                        .WithMany("Dewornings")
+                        .HasForeignKey("VetTimeSlotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Animal");
+
+                    b.Navigation("VetCabinet");
+
+                    b.Navigation("VetTimeSlot");
                 });
 
             modelBuilder.Entity("PawPoint.DB.Entities.Feeding", b =>
@@ -651,7 +681,23 @@ namespace PawPoint.DB.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("PawPoint.DB.Entities.VetCabinet", "VetCabinet")
+                        .WithMany("Vaccinations")
+                        .HasForeignKey("VetCabinetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PawPoint.DB.Entities.VetTimeSlot", "VetTimeSlot")
+                        .WithMany("Vaccinations")
+                        .HasForeignKey("VetTimeSlotId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Animal");
+
+                    b.Navigation("VetCabinet");
+
+                    b.Navigation("VetTimeSlot");
                 });
 
             modelBuilder.Entity("PawPoint.DB.Entities.VerificationToken", b =>
@@ -723,12 +769,20 @@ namespace PawPoint.DB.Migrations
                 {
                     b.Navigation("Appointments");
 
+                    b.Navigation("Dewornings");
+
                     b.Navigation("TimeSlots");
+
+                    b.Navigation("Vaccinations");
                 });
 
             modelBuilder.Entity("PawPoint.DB.Entities.VetTimeSlot", b =>
                 {
                     b.Navigation("Appointments");
+
+                    b.Navigation("Dewornings");
+
+                    b.Navigation("Vaccinations");
                 });
 #pragma warning restore 612, 618
         }

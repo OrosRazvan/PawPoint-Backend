@@ -103,9 +103,9 @@ namespace PawPoint.Services.Services
             if (slot.BookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected slot is full.");
 
-            // Only future slots
-            if (slot.StartTimeUtc <= DateTime.UtcNow)
-                throw new InvalidOperationException("You can only book future slots.");
+            //// Only future slots
+            //if (slot.StartTimeUtc <= DateTime.UtcNow)
+            //    throw new InvalidOperationException("You can only book future slots.");
 
             // Book slot capacity
             slot.BookedCount += 1;

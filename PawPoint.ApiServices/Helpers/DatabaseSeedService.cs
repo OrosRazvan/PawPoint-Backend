@@ -1,6 +1,7 @@
-﻿using PawPoint.DB;
+﻿using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using PawPoint.DB;
 using PawPoint.DB.Entities;
-using Microsoft.EntityFrameworkCore;
 using TaskThreading = System.Threading.Tasks.Task;
 
 namespace PawPoint.ApiServices.Helpers
@@ -11,50 +12,48 @@ namespace PawPoint.ApiServices.Helpers
         {
             var context = serviceScope.ServiceProvider.GetRequiredService<Context>();
 
-            // Apply pending migrations
-            if (context.Database.GetPendingMigrations().Any())
-            {
-                var strat = context.Database.CreateExecutionStrategy();
-                strat.Execute(() => context.Database.Migrate());            
-            }
+            var strat = context.Database.CreateExecutionStrategy();
+            strat.Execute(() => context.Database.Migrate());
 
-            // Always attempt to seed (flag ensures one-time run per DB)
             SeedDatabase(context).GetAwaiter().GetResult();
         }
 
         public async TaskThreading SeedDatabase(Context database)
         {
-            var seedRecord = await database.SeedStatuses.FirstOrDefaultAsync();
+            SeedStatus? seedRecord;
+
+            try
+            {
+                seedRecord = await database.SeedStatuses.FirstOrDefaultAsync();
+            }
+            catch (PostgresException ex) when (ex.SqlState == "42P01")
+            {
+                // SeedStatuses nu există -> migrațiile nu au creat schema (încă).
+                // Nu mai crăpăm aplicația.
+                return;
+            }
+
             if (seedRecord == null)
             {
-                // PRIMA dată când pornește aplicația pe DB-ul ăsta → vrem să SEED-uim
                 seedRecord = new SeedStatus { ShouldSeedDatabase = true };
                 database.SeedStatuses.Add(seedRecord);
                 await database.SaveChangesAsync();
             }
 
-            // dacă flag-ul e false, nu mai seed-uim
             if (!seedRecord.ShouldSeedDatabase)
-            {
-                await SeedVetCabinets(database);
-                await database.SaveChangesAsync();
-
-                await SeedVetTimeSlots(database);
-                await database.SaveChangesAsync();
                 return;
-            }
 
             await SeedNotificationPreferences(database);
             await SeedNotificationTypes(database);
             await SeedVerificationTokenTypes(database);
+            await database.SaveChangesAsync();
 
             await SeedVetCabinets(database);
-            await database.SaveChangesAsync();   // ca să aibă Id-uri cabinetele
+            await database.SaveChangesAsync();
 
             await SeedVetTimeSlots(database);
             await database.SaveChangesAsync();
 
-            // după ce am seed-uit o dată, nu mai vrem să rulăm automat
             seedRecord.ShouldSeedDatabase = false;
             await database.SaveChangesAsync();
         }
