@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using PawPoint.DB.Enums;
 
 namespace PawPoint.DB.Entities
 {
@@ -10,8 +11,7 @@ namespace PawPoint.DB.Entities
         public int AnimalId { get; set; }
         public Animal Animal { get; set; } = null!;
 
-        [MaxLength(100)]
-        public required string Type { get; set; }          // External, Internal, Control, etc.
+        public DewormingTypeEnum Type { get; set; }
 
         public DateTime Date { get; set; }                 // data deparazitării
 
@@ -19,8 +19,11 @@ namespace PawPoint.DB.Entities
 
         public DateTime? NextDate { get; set; }            // data următoare
 
-        [MaxLength(200)]
-        public string? ClinicName { get; set; }
+        public int VetCabinetId { get; set; }
+        public VetCabinet VetCabinet { get; set; } = null!;
+
+        public int VetTimeSlotId { get; set; }
+        public VetTimeSlot VetTimeSlot { get; set; } = null!;
 
         [MaxLength(500)]
         public string? Notes { get; set; }

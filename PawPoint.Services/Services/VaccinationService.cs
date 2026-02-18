@@ -7,14 +7,9 @@ using PawPoint.Services.Responses;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class VaccinationService : IVaccinationService
+    public sealed class VaccinationService(Context db) : IVaccinationService
     {
-        private readonly Context _db;
-
-        public VaccinationService(Context db)
-        {
-            _db = db;
-        }
+        private readonly Context _db = db;
 
         public async Task<IReadOnlyList<VaccinationResponse>> GetAllForUserAsync(int userId)
         {
