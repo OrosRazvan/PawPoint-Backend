@@ -18,5 +18,7 @@ namespace PawPoint.DB.Entities
         public int BookedCount { get; set; } = 0;
 
         public ICollection<Appointment> Appointments { get; set; } = [];
+        public ICollection<Vaccination> Vaccinations { get; set; } = [];
+
     }
 }
