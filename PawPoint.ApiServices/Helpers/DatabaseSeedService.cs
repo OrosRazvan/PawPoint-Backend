@@ -81,14 +81,28 @@ namespace PawPoint.ApiServices.Helpers
 
         private static async TaskThreading SeedNotificationTypes(Context database)
         {
+            if (await database.NotificationTypes.AnyAsync())
+                return; 
+
             var notificationTypes = new List<NotificationType>
             {
-                new NotificationType {Name = "Reminder" },
-                new NotificationType {Name = "Alert" },
-                new NotificationType {Name = "Invitation" },
-                new NotificationType {Name = "Commercial" }
+                new NotificationType { Id = 1,  Name = "AppointmentBooked" },
+                new NotificationType { Id = 2,  Name = "AppointmentReminder" },
+                new NotificationType { Id = 3,  Name = "AppointmentRescheduled" },
+
+                new NotificationType { Id = 10, Name = "VaccinationBooked" },
+                new NotificationType { Id = 11, Name = "VaccinationReminder" },
+                new NotificationType { Id = 12, Name = "VaccinationDue" },
+
+                new NotificationType { Id = 20, Name = "DewormingBooked" },
+                new NotificationType { Id = 21, Name = "DewormingReminder" },
+                new NotificationType { Id = 22, Name = "DewormingDue" },
+
+                new NotificationType { Id = 30, Name = "FeedingReminder" }
             };
+
             await database.NotificationTypes.AddRangeAsync(notificationTypes);
+            await database.SaveChangesAsync();
         }
 
         private static async TaskThreading SeedVetCabinets(Context database)

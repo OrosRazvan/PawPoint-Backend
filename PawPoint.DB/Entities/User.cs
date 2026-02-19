@@ -29,5 +29,7 @@ namespace PawPoint.DB.Entities
         public ICollection<Notification> Notifications { get; set; } = [];
         public ICollection<VerificationToken> VerificationTokens { get; set; } = [];
         public ICollection<Animal> Animals { get; set; } = [];
+        public UserSettings? Settings { get; set; }
+
     }
 }

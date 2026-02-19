@@ -1,17 +1,21 @@
-﻿using PawPoint.DB;
+﻿using Hangfire;
+using Microsoft.EntityFrameworkCore;
+using PawPoint.DB;
 using PawPoint.DB.Entities;
 using PawPoint.DB.Enums;
 using PawPoint.Services.Extensions;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
-using Microsoft.EntityFrameworkCore;
 using SystemTask = System.Threading.Tasks.Task;
-using Hangfire;
 
 namespace PawPoint.Services.Services
 {
-    public class NotificationService(Context dbContext, INotificationRealtimeDispatcher realtime, IBackgroundJobClient jobs) : INotificationService
+    public class NotificationService(
+        Context dbContext,
+        INotificationRealtimeDispatcher realtime,
+        IBackgroundJobClient jobs
+    ) : INotificationService
     {
         public async Task<PagedResult<NotificationResponse>> GetAllNotificationsAsync(
             int userId,
@@ -26,23 +30,19 @@ namespace PawPoint.Services.Services
 
             query = ApplyFilters(query, isRead, typeId);
 
-            var invitationName = NotificationTypeEnum.Invitation.ToString().ToLower();
-
             var ordered = query
-                .OrderBy(n => n.IsRead) 
-                .ThenByDescending(n => n.NotificationType.Name.ToLower() == invitationName) 
+                .OrderBy(n => n.IsRead)
                 .ThenByDescending(n => n.CreatedAt);
 
-            var projected = ordered
-                .Select(n => new NotificationResponse(
-                    n.Id,
-                    n.Name,
-                    n.Content,
-                    n.IsRead,
-                    n.CreatedAt,
-                    n.NotificationTypeId,
-                    n.NotificationType.Name
-                ));
+            var projected = ordered.Select(n => new NotificationResponse(
+                n.Id,
+                n.Name,
+                n.Content,
+                n.IsRead,
+                n.CreatedAt,
+                n.NotificationTypeId,
+                n.NotificationType.Name
+            ));
 
             return await projected.ToPagedAsync(pageNumber, pageSize);
         }
@@ -50,13 +50,14 @@ namespace PawPoint.Services.Services
         public async SystemTask MarkAsReadAsync(int userId, int notificationId)
         {
             var notification = await dbContext.Notifications
-                .FirstOrDefaultAsync(n => n.Id == notificationId && n.UserId == userId && !n.IsDeleted);
-            
+                .FirstOrDefaultAsync(n =>
+                    n.Id == notificationId &&
+                    n.UserId == userId &&
+                    !n.IsDeleted);
+
             if (notification == null)
-            {
                 throw new KeyNotFoundException("Notification not found.");
-            }
-            
+
             if (!notification.IsRead)
             {
                 notification.IsRead = true;
@@ -68,108 +69,105 @@ namespace PawPoint.Services.Services
 
         public async SystemTask SoftDeleteNotificationsAsync(int userId, int notificationId)
         {
-            var notification = await dbContext.Notifications
-                .Where(n => n.Id == notificationId 
-                    && n.UserId == userId
-                    && !n.IsDeleted
-                    && n.IsRead
-                    && n.ReadAt != null
-                    && n.ReadAt <= DateTime.UtcNow.AddDays(-1))
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(n => n.IsDeleted, true)
-                );
+            var updated = await dbContext.Notifications
+                .Where(n =>
+                    n.Id == notificationId &&
+                    n.UserId == userId &&
+                    !n.IsDeleted &&
+                    n.IsRead &&
+                    n.ReadAt != null &&
+                    n.ReadAt <= DateTime.UtcNow.AddDays(-1))
+                .ExecuteUpdateAsync(u => u.SetProperty(n => n.IsDeleted, true));
 
-            if (notification == 0)
-            {
+            if (updated == 0)
                 throw new KeyNotFoundException("Notification not found");
-            }
         }
 
+        /// <summary>
+        /// Creează notificarea imediat (DB) + o trimite realtime prin SignalR.
+        /// </summary>
         public async SystemTask CreateNotificationAsync(int userId, NotificationCreateRequest request, bool systemRun = false)
         {
-            if (request.Type is NotificationTypeEnum.Alert or NotificationTypeEnum.Invitation)
+            if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
+            if (request.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
+
+            var typeEntity = await dbContext.NotificationTypes
+                .FirstAsync(t => t.Name == request.Type.ToString());
+
+            var title = string.IsNullOrWhiteSpace(request.Title)
+                ? request.Type.ToString()
+                : request.Title.Trim();
+
+            var content = request.Content?.Trim() ?? string.Empty;
+
+            var n = new Notification
             {
-                var typeEntity = await dbContext.NotificationTypes
-                    .FirstAsync(t => t.Name == request.Type.ToString());
+                Name = title,
+                Content = content,
+                UserId = request.UserId,
+                NotificationTypeId = typeEntity.Id,
+                // CreatedAt = DateTime.UtcNow  // dacă nu ai default în DB/entity
+            };
 
-                var n = new Notification
-                {
-                    Name = string.IsNullOrWhiteSpace(request.Title) ? request.Type.ToString() : request.Title,
-                    Content = request.Content,
-                    UserId = request.UserId,              
-                    NotificationTypeId = typeEntity.Id
-                };
+            dbContext.Notifications.Add(n);
+            await dbContext.SaveChangesAsync();
 
-                dbContext.Notifications.Add(n);
-                await dbContext.SaveChangesAsync();
+            await PushRealtimeAsync(n, request.Type);
+        }
 
-                await realtime.PushToUserAsync(request.UserId, new
-                {
-                    id = n.Id,
-                    n.Name,
-                    n.Content,
-                    n.IsRead,
-                    n.CreatedAt,
-                    typeId = n.NotificationTypeId,
-                    typeName = request.Type.ToString()
-                });
+        /// <summary>
+        /// Programează o notificare la o dată/oră exactă (UTC).
+        /// Ex: slot.StartTimeUtc.AddHours(-24), nextDate.Date.AddHours(9), etc.
+        /// </summary>
+        public SystemTask ScheduleNotificationAsync(int userId, NotificationCreateRequest request, DateTime whenUtc)
+        {
+            if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
+            if (request.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
 
-                return;
+            // Nu programa în trecut -> trimite imediat
+            if (whenUtc <= DateTime.UtcNow.AddSeconds(5))
+            {
+                return CreateNotificationAsync(userId, request, systemRun: true);
             }
 
-            if (request.Type is NotificationTypeEnum.Reminder or NotificationTypeEnum.Commercial)
-            {
-                if (!systemRun)
-                {
-                    jobs.Schedule<INotificationService>(
-                        s => s.CreateNotificationAsync(userId, request, true),
-                        NextDay());
+            jobs.Schedule<INotificationService>(
+                s => s.CreateScheduledNotificationAsync(userId, request),
+                whenUtc
+            );
 
-                    return;
-                }
+            return SystemTask.CompletedTask;
+        }
 
-                var typeEntity = await dbContext.NotificationTypes
-                    .FirstAsync(t => t.Name == request.Type.ToString());
-
-                var title = string.IsNullOrWhiteSpace(request.Title)
-                    ? request.Type.ToString()
-                    : request.Title;
-
-                var content = !string.IsNullOrWhiteSpace(request.Content)
-                    ? request.Content
-                    : request.Type == NotificationTypeEnum.Reminder
-                        ? $"Don't forget about your objectives ({DateTime.UtcNow.Date:yyyy-MM-dd})!"
-                        : "Today's offer just dropped!";
-
-                var n = new Notification
-                {
-                    Name = title,
-                    Content = content,
-                    UserId = request.UserId,
-                    NotificationTypeId = typeEntity.Id
-                };
-
-                dbContext.Notifications.Add(n);
-                await dbContext.SaveChangesAsync();
-
-                await realtime.PushToUserAsync(request.UserId, new
-                {
-                    id = n.Id,
-                    n.Name,
-                    n.Content,
-                    n.IsRead,
-                    n.CreatedAt,
-                    typeId = n.NotificationTypeId,
-                    typeName = request.Type.ToString()
-                });
-
-                return;
-            }
-
-            throw new ArgumentException($"Unknown notification type: {request.Type}");
+        /// <summary>
+        /// Metodă apelată de Hangfire la momentul programat.
+        /// </summary>
+        [AutomaticRetry(Attempts = 2)]
+        public async SystemTask CreateScheduledNotificationAsync(int userId, NotificationCreateRequest request)
+        {
+            // doar rulează create normal (imediat)
+            await CreateNotificationAsync(userId, request, systemRun: true);
         }
 
         #region Private Methods
+
+        private async SystemTask PushRealtimeAsync(Notification n, NotificationTypeEnum typeEnum)
+        {
+            // AsNoTracking: n vine tracked, dar e ok; ne trebuie NotificationType.Name pentru response
+            // Dacă nu ai navigation loaded, poți face load:
+            // await dbContext.Entry(n).Reference(x => x.NotificationType).LoadAsync();
+
+            await realtime.PushToUserAsync(n.UserId, new
+            {
+                id = n.Id,
+                name = n.Name,
+                content = n.Content,
+                isRead = n.IsRead,
+                createdAt = n.CreatedAt,
+                typeId = n.NotificationTypeId,
+                typeName = typeEnum.ToString()
+            });
+        }
+
         private static IQueryable<Notification> ApplyFilters(
             IQueryable<Notification> query,
             bool? isRead,
@@ -191,16 +189,6 @@ namespace PawPoint.Services.Services
             return query;
         }
 
-        private static DateTime NextDay()
-        {
-            var now = DateTime.UtcNow;
-            var next = now.Date.AddHours(7); 
-            if (now >= next)
-            {
-                next = next.AddDays(1); 
-            }
-            return next;
-        }
         #endregion
     }
 }
