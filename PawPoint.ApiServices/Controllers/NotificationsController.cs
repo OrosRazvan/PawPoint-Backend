@@ -40,9 +40,21 @@ namespace PawPoint.ApiServices.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] NotificationCreateRequest request)
         {
+            if (request is null)
+                return BadRequest("Request body is required.");
+
             var userId = GetUserIdFromToken();
-            await _notificationService.CreateNotificationAsync(userId, request); 
-            return Ok(); 
+
+            var fixedRequest = new NotificationCreateRequest(
+                request.Type,
+                userId,
+                request.Title,
+                request.Content
+            );
+
+            await _notificationService.CreateNotificationAsync(userId, fixedRequest);
+
+            return NoContent();
         }
     }
 }

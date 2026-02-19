@@ -199,6 +199,7 @@ public class Program
         builder.Services.AddScoped<IVaccinationService, VaccinationService>();
         builder.Services.AddScoped<IDewormingService, DewormingService>();
         builder.Services.AddScoped<IFeedingService, FeedingService>();
+        builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());

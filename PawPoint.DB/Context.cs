@@ -20,6 +20,7 @@ namespace PawPoint.DB
         public DbSet<Vaccination> Vaccinations => Set<Vaccination>();
         public DbSet<Deworming> Dewormings => Set<Deworming>();
         public DbSet<Feeding> Feedings => Set<Feeding>();
+        public DbSet<UserSettings> UserSettings => Set<UserSettings>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -98,6 +99,13 @@ namespace PawPoint.DB
                 .HasOne(f => f.Animal)
                 .WithMany(a => a.Feedings)
                 .HasForeignKey(f => f.AnimalId);
+
+            modelBuilder.Entity<UserSettings>()
+                .HasOne(s => s.User)
+                .WithOne(u => u.Settings)
+                .HasForeignKey<UserSettings>(s => s.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
         }
     }
 }

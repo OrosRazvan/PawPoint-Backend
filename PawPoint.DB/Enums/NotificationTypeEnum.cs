@@ -2,9 +2,18 @@
 {
     public enum NotificationTypeEnum
     {
-        Reminder = 1,
-        Alert = 2,
-        Invitation = 3,
-        Commercial = 4
+        AppointmentBooked = 1,
+        AppointmentReminder = 2,
+        AppointmentRescheduled = 3,
+
+        VaccinationBooked = 10,   
+        VaccinationReminder = 11, 
+        VaccinationDue = 12,     
+
+        DewormingBooked = 20,
+        DewormingReminder = 21,
+        DewormingDue = 22,
+
+        FeedingReminder = 30,
     }
 }

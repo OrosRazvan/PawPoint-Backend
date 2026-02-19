@@ -119,12 +119,20 @@ namespace PawPoint.Services.Services
 
             var user = await _db.Users
                 .Include(u => u.NotificationPreference)
+                .Include(u => u.Settings)
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
             ValidateUserFound(user, userId);
 
+            var s = user!.Settings;
+
             return new UserSettingsResponse(
-                NotificationPreferenceId: user!.NotificationPreferenceId,
+                UserId: user.Id,
+                DarkMode: s?.DarkMode ?? false,
+                TextSize: s?.TextSize ?? "Medium",
+                WeightUnit: s?.WeightUnit ?? "kg",
+                DateFormat: s?.DateFormat ?? "DD/MM/YYYY",
+                NotificationPreferenceId: user.NotificationPreferenceId,
                 NotificationPreference: user.NotificationPreference.Name
             );
         }
@@ -149,6 +157,7 @@ namespace PawPoint.Services.Services
 
             var user = await _db.Users
                 .Include(u => u.NotificationPreference)
+                .Include(u => u.Settings)
                 .FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user is null)
@@ -167,7 +176,17 @@ namespace PawPoint.Services.Services
 
             if (user.NotificationPreferenceId == pref.Id)
             {
-                return new UserSettingsResponse(pref.Id, pref.Name);
+                var se = user.Settings;
+
+                return new UserSettingsResponse(
+                    UserId: user.Id,
+                    DarkMode: se?.DarkMode ?? false,
+                    TextSize: se?.TextSize ?? "Medium",
+                    WeightUnit: se?.WeightUnit ?? "kg",
+                    DateFormat: se?.DateFormat ?? "DD/MM/YYYY",
+                    NotificationPreferenceId: pref.Id,
+                    NotificationPreference: pref.Name
+                );
             }
 
             user.NotificationPreferenceId = pref.Id;
@@ -175,7 +194,17 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
-            return new UserSettingsResponse(pref.Id, pref.Name);
+            var s = user.Settings;
+
+            return new UserSettingsResponse(
+                UserId: user.Id,
+                DarkMode: s?.DarkMode ?? false,
+                TextSize: s?.TextSize ?? "Medium",
+                WeightUnit: s?.WeightUnit ?? "kg",
+                DateFormat: s?.DateFormat ?? "DD/MM/YYYY",
+                NotificationPreferenceId: pref.Id,
+                NotificationPreference: pref.Name
+            );
         }
 
         public async ThreadingTask SoftDeleteUserAsync(int userId)

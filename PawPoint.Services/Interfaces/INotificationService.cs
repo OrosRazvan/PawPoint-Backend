@@ -15,5 +15,8 @@ namespace PawPoint.Services.Interfaces
         public Task MarkAsReadAsync(int userId, int notificationId);
         public Task SoftDeleteNotificationsAsync(int userId, int notificationId);
         public Task CreateNotificationAsync(int userId, NotificationCreateRequest request, bool systemRun = false);
+        public Task ScheduleNotificationAsync(int userId, NotificationCreateRequest request, DateTime whenUtc);
+        public Task CreateScheduledNotificationAsync(int userId, NotificationCreateRequest request);
+
     }
 }
