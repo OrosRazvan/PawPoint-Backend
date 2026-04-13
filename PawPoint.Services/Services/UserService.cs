@@ -1,5 +1,6 @@
 ﻿using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
@@ -12,13 +13,16 @@ namespace PawPoint.Services.Services
         IProfilePictureService pictureService,
         IProfilePictureUrlFactory urlFactory,
         IPiiEncryptionService pii,
+        INotificationService notificationService,
         IPasswordService? passwordService = null) : IUserService
     {
         private readonly Context _db = db;
         private readonly IProfilePictureService _pictureService = pictureService;
         private readonly IProfilePictureUrlFactory _urlFactory = urlFactory;
         private readonly IPiiEncryptionService _pii = pii;
+        private readonly INotificationService _notifications = notificationService;
         private readonly IPasswordService? _passwords = passwordService;
+
         public async Task<UserProfileResponse> GetProfileAsync(int userId)
         {
             userId = ValidateUserId(userId);
@@ -72,6 +76,16 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
+            await _notifications.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.ProfileUpdated,
+                    userId,
+                    "Profile updated",
+                    "Your profile information has been updated successfully."
+                )
+            );
+
             return new UserProfileResponse(
                 Email: DecryptOrRaw(user!.Email),
                 FullName: user.FullName,
@@ -111,6 +125,16 @@ namespace PawPoint.Services.Services
             user.UpdatedAt = DateTime.UtcNow;
 
             await _db.SaveChangesAsync();
+
+            await _notifications.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.PasswordChanged,
+                    userId,
+                    "Password changed",
+                    "Your password has been changed successfully."
+                )
+            );
         }
 
         public async Task<UserSettingsResponse> GetSettingsAsync(int userId)
@@ -194,6 +218,16 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
+            await _notifications.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.SettingsUpdated,
+                    userId,
+                    "Settings updated",
+                    "Your notification settings have been updated successfully."
+                )
+            );
+
             var s = user.Settings;
 
             return new UserSettingsResponse(
@@ -223,6 +257,7 @@ namespace PawPoint.Services.Services
         }
 
         #region Private Methods
+
         private static int ValidateUserId(int userId)
         {
             _ = userId switch
@@ -241,6 +276,7 @@ namespace PawPoint.Services.Services
                 false => true
             };
         }
+
         private string DecryptOrRaw(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -257,6 +293,7 @@ namespace PawPoint.Services.Services
                 return value;
             }
         }
+
         private static UpdateUserProfileRequest ValidateRequest(UpdateUserProfileRequest req)
         {
             if (req is null)
@@ -315,6 +352,7 @@ namespace PawPoint.Services.Services
             };
             return req!;
         }
+
         #endregion
     }
 }

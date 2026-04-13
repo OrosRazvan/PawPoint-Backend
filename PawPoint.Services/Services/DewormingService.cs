@@ -1,15 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class DewormingService(Context db) : IDewormingService
+    public sealed class DewormingService(Context db, INotificationService notificationService) : IDewormingService
     {
         private readonly Context _db = db;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<IReadOnlyList<DewormingResponse>> GetAllForUserAsync(int userId)
         {
@@ -75,21 +77,18 @@ namespace PawPoint.Services.Services
             if (request.IntervalDays <= 0)
                 throw new ArgumentException("IntervalDays must be > 0.");
 
-            // Animal belongs to user
             var animal = await _db.Animals
                 .FirstOrDefaultAsync(a => a.Id == request.AnimalId && a.UserId == userId);
 
             if (animal is null)
                 throw new KeyNotFoundException("Animal not found for current user.");
 
-            // Cabinet exists
             var cabinet = await _db.VetCabinets
                 .FirstOrDefaultAsync(c => c.Id == request.VetCabinetId);
 
             if (cabinet is null)
                 throw new KeyNotFoundException("Vet cabinet not found.");
 
-            // Slot exists (tracking, because we update BookedCount)
             var slot = await _db.VetTimeSlots
                 .FirstOrDefaultAsync(s => s.Id == request.VetTimeSlotId);
 
@@ -99,15 +98,9 @@ namespace PawPoint.Services.Services
             if (slot.VetCabinetId != request.VetCabinetId)
                 throw new ArgumentException("Selected slot does not belong to selected cabinet.");
 
-            // Capacity check
             if (slot.BookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected slot is full.");
 
-            //// Only future slots
-            //if (slot.StartTimeUtc <= DateTime.UtcNow)
-            //    throw new InvalidOperationException("You can only book future slots.");
-
-            // Book slot capacity
             slot.BookedCount += 1;
 
             var dateUtc = slot.StartTimeUtc;
@@ -127,6 +120,24 @@ namespace PawPoint.Services.Services
 
             _db.Dewormings.Add(entity);
             await _db.SaveChangesAsync();
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.DewormingBooked,
+                    userId,
+                    "Deworming booked",
+                    $"{animal.Name} has been scheduled for deworming ({entity.Type}) on {entity.Date:dd.MM.yyyy}. DEW:{entity.Id}"
+                )
+            );
+
+            await ScheduleDewormingRemindersAsync(
+                userId,
+                animal.Name,
+                entity.Type.ToString(),
+                entity.Id,
+                entity.NextDate
+            );
 
             var created = await _db.Dewormings
                 .AsNoTracking()
@@ -172,6 +183,24 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.DewormingUpdated,
+                    userId,
+                    "Deworming updated",
+                    $"{entity.Animal.Name}'s deworming ({entity.Type}) has been updated. DEW:{entity.Id}"
+                )
+            );
+
+            await ScheduleDewormingRemindersAsync(
+                userId,
+                entity.Animal.Name,
+                entity.Type.ToString(),
+                entity.Id,
+                entity.NextDate
+            );
+
             var updated = await _db.Dewormings
                 .AsNoTracking()
                 .Include(d => d.Animal)
@@ -197,7 +226,16 @@ namespace PawPoint.Services.Services
             if (entity.Animal.UserId != userId)
                 throw new UnauthorizedAccessException("Not allowed.");
 
-            // Release slot capacity
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.DewormingCancelled,
+                    userId,
+                    "Deworming removed",
+                    $"{entity.Animal.Name}'s deworming ({entity.Type}) has been removed. DEW:{entity.Id}"
+                )
+            );
+
             if (entity.VetTimeSlot.BookedCount > 0)
                 entity.VetTimeSlot.BookedCount -= 1;
 
@@ -221,5 +259,38 @@ namespace PawPoint.Services.Services
                 d.VetTimeSlot.EndTimeUtc,
                 d.Notes
             );
+
+        private async Task ScheduleDewormingRemindersAsync(
+            int userId,
+            string animalName,
+            string type,
+            int dewormingId,
+            DateTime? nextDateUtc)
+        {
+            if (!nextDateUtc.HasValue)
+                return;
+
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.DewormingReminder,
+                    userId,
+                    "Deworming reminder",
+                    $"{animalName} needs deworming ({type}) in 7 days, around {nextDateUtc.Value:dd.MM.yyyy}. DEW:{dewormingId}"
+                ),
+                nextDateUtc.Value.AddDays(-7)
+            );
+
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.DewormingReminder,
+                    userId,
+                    "Deworming reminder",
+                    $"{animalName} needs deworming ({type}) tomorrow, around {nextDateUtc.Value:dd.MM.yyyy}. DEW:{dewormingId}"
+                ),
+                nextDateUtc.Value.AddDays(-1)
+            );
+        }
     }
 }

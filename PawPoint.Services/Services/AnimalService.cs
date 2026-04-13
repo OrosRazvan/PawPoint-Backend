@@ -1,5 +1,6 @@
 ﻿using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
@@ -7,9 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class AnimalService(Context db) : IAnimalService
+    public sealed class AnimalService(Context db, INotificationService notificationService) : IAnimalService
     {
         private readonly Context _db = db;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<AnimalResponse?> GetByIdAsync(int animalId, int userId)
         {
@@ -41,7 +43,6 @@ namespace PawPoint.Services.Services
             ValidateUserId(userId);
             ValidateCreate(request);
 
-            // nu lăsăm dubluri de același animal la același user
             var exists = await _db.Animals.AnyAsync(a =>
                 a.UserId == userId &&
                 a.Name == request.Name &&
@@ -69,6 +70,16 @@ namespace PawPoint.Services.Services
 
             _db.Animals.Add(animal);
             await _db.SaveChangesAsync();
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AnimalCreated,
+                    userId,
+                    "Animal added",
+                    $"{animal.Name} has been added to your account."
+                )
+            );
 
             return ToResponse(animal);
         }
@@ -110,6 +121,16 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AnimalUpdated,
+                    userId,
+                    "Animal updated",
+                    $"{animal.Name}'s details have been updated."
+                )
+            );
+
             return ToResponse(animal);
         }
 
@@ -123,12 +144,23 @@ namespace PawPoint.Services.Services
 
             if (animal is null)
             {
-                // nimic de șters, e idempotent
                 return;
             }
 
-            animal.IsDeleted = true; // ai query filter în Context
+            var animalName = animal.Name;
+
+            animal.IsDeleted = true;
             await _db.SaveChangesAsync();
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AnimalDeleted,
+                    userId,
+                    "Animal removed",
+                    $"{animalName} has been removed from your account."
+                )
+            );
         }
 
         #region Helpers

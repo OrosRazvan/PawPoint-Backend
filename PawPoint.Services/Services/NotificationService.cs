@@ -92,7 +92,13 @@ namespace PawPoint.Services.Services
             if (request.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
 
             var typeEntity = await dbContext.NotificationTypes
-                .FirstAsync(t => t.Name == request.Type.ToString());
+                .FirstOrDefaultAsync(t => t.Name == request.Type.ToString());
+
+            if (typeEntity is null)
+            {
+                throw new KeyNotFoundException(
+                    $"Notification type '{request.Type}' was not found in NotificationTypes table.");
+            }
 
             var title = string.IsNullOrWhiteSpace(request.Title)
                 ? request.Type.ToString()

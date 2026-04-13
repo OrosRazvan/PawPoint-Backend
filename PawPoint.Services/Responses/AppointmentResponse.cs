@@ -6,11 +6,12 @@
         string AnimalName,
         int VetCabinetId,
         string VetCabinetName,
+        string VetCabinetAddress,
         int VetTimeSlotId,
-        DateTime StartTimeUtc,
-        DateTime EndTimeUtc,
+        DateTime SlotStartTimeUtc,
+        DateTime SlotEndTimeUtc,
         string ServiceType,
-        decimal? EstimatedPriceRon,
+        decimal? PriceRon,
         string Status,
         bool Notify24hInAdvance
     );
