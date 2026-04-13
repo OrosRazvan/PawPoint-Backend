@@ -82,23 +82,36 @@ namespace PawPoint.ApiServices.Helpers
         private static async TaskThreading SeedNotificationTypes(Context database)
         {
             if (await database.NotificationTypes.AnyAsync())
-                return; 
+                return;
 
             var notificationTypes = new List<NotificationType>
             {
                 new NotificationType { Id = 1,  Name = "AppointmentBooked" },
                 new NotificationType { Id = 2,  Name = "AppointmentReminder" },
                 new NotificationType { Id = 3,  Name = "AppointmentRescheduled" },
+                new NotificationType { Id = 4,  Name = "AppointmentCancelled" },
 
                 new NotificationType { Id = 10, Name = "VaccinationBooked" },
                 new NotificationType { Id = 11, Name = "VaccinationReminder" },
                 new NotificationType { Id = 12, Name = "VaccinationDue" },
+                new NotificationType { Id = 13, Name = "VaccinationUpdated" },
+                new NotificationType { Id = 14, Name = "VaccinationCancelled" },
 
                 new NotificationType { Id = 20, Name = "DewormingBooked" },
                 new NotificationType { Id = 21, Name = "DewormingReminder" },
                 new NotificationType { Id = 22, Name = "DewormingDue" },
+                new NotificationType { Id = 23, Name = "DewormingUpdated" },
+                new NotificationType { Id = 24, Name = "DewormingCancelled" },
 
-                new NotificationType { Id = 30, Name = "FeedingReminder" }
+                new NotificationType { Id = 30, Name = "FeedingReminder" },
+
+                new NotificationType { Id = 40, Name = "AnimalCreated" },
+                new NotificationType { Id = 41, Name = "AnimalUpdated" },
+                new NotificationType { Id = 42, Name = "AnimalDeleted" },
+
+                new NotificationType { Id = 50, Name = "ProfileUpdated" },
+                new NotificationType { Id = 51, Name = "PasswordChanged" },
+                new NotificationType { Id = 52, Name = "SettingsUpdated" }
             };
 
             await database.NotificationTypes.AddRangeAsync(notificationTypes);

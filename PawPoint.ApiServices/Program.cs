@@ -55,7 +55,11 @@ public class Program
         {
             options.AddPolicy("AllowFrontendApp", policy =>
             {
-                policy.WithOrigins("https://lateral-inspire.vercel.app")
+                policy.WithOrigins(
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "https://localhost:5001",
+                    "http://localhost:5000")
                       .AllowAnyHeader()
                       .AllowAnyMethod();
             });
@@ -66,7 +70,8 @@ public class Program
                     "https://localhost:5001",
                     "http://localhost:5000",
                     "https://scalar.local",
-                    "http://127.0.0.1:5173")
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5173")
                       .AllowAnyHeader()
                       .AllowAnyMethod();
             });

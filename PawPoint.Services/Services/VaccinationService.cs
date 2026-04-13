@@ -1,15 +1,17 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class VaccinationService(Context db) : IVaccinationService
+    public sealed class VaccinationService(Context db, INotificationService notificationService) : IVaccinationService
     {
         private readonly Context _db = db;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<IReadOnlyList<VaccinationResponse>> GetAllForUserAsync(int userId)
         {
@@ -64,20 +66,16 @@ namespace PawPoint.Services.Services
                 request.NextDate.Value < request.LastDate.Value)
                 throw new ArgumentException("NextDateUtc must be >= LastDateUtc.");
 
-            // Animal must belong to user
             var animal = await _db.Animals
                 .FirstOrDefaultAsync(a => a.Id == request.AnimalId && a.UserId == userId);
 
             if (animal is null) throw new KeyNotFoundException("Animal not found for current user.");
 
-            // Cabinet exists
             var cabinet = await _db.VetCabinets
                 .FirstOrDefaultAsync(c => c.Id == request.VetCabinetId);
 
             if (cabinet is null) throw new KeyNotFoundException("Vet cabinet not found.");
 
-            // Slot exists + belongs to cabinet + has capacity
-            // Tracking because we update BookedCount
             var slot = await _db.VetTimeSlots
                 .FirstOrDefaultAsync(s => s.Id == request.VetTimeSlotId);
 
@@ -86,15 +84,12 @@ namespace PawPoint.Services.Services
             if (slot.VetCabinetId != request.VetCabinetId)
                 throw new ArgumentException("Selected slot does not belong to selected cabinet.");
 
-            // capacity check (în loc de IsBooked)
             if (slot.BookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected slot is full.");
 
-            // optional: only future
             if (slot.StartTimeUtc <= DateTime.UtcNow)
                 throw new InvalidOperationException("You can only book future slots.");
 
-            // book it (like appointment)
             slot.BookedCount += 1;
 
             var vaccination = new Vaccination
@@ -110,6 +105,24 @@ namespace PawPoint.Services.Services
 
             _db.Vaccinations.Add(vaccination);
             await _db.SaveChangesAsync();
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.VaccinationBooked,
+                    userId,
+                    "Vaccination booked",
+                    $"{animal.Name} has been scheduled for {vaccination.VaccineName} on {slot.StartTimeUtc:dd.MM.yyyy}. VAX:{vaccination.Id}"
+                )
+            );
+
+            await ScheduleVaccinationRemindersAsync(
+                userId,
+                animal.Name,
+                vaccination.VaccineName,
+                vaccination.Id,
+                vaccination.NextDate
+            );
 
             var created = await _db.Vaccinations
                 .AsNoTracking()
@@ -149,6 +162,24 @@ namespace PawPoint.Services.Services
 
             await _db.SaveChangesAsync();
 
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.VaccinationUpdated,
+                    userId,
+                    "Vaccination updated",
+                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineName}) has been updated. VAX:{vax.Id}"
+                )
+            );
+
+            await ScheduleVaccinationRemindersAsync(
+                userId,
+                vax.Animal.Name,
+                vax.VaccineName,
+                vax.Id,
+                vax.NextDate
+            );
+
             var updated = await _db.Vaccinations
                 .AsNoTracking()
                 .Include(v => v.Animal)
@@ -168,6 +199,16 @@ namespace PawPoint.Services.Services
 
             if (vax is null) return;
             if (vax.Animal.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.VaccinationCancelled,
+                    userId,
+                    "Vaccination removed",
+                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineName}) has been removed. VAX:{vax.Id}"
+                )
+            );
 
             if (vax.VetTimeSlot.BookedCount > 0)
                 vax.VetTimeSlot.BookedCount -= 1;
@@ -191,5 +232,38 @@ namespace PawPoint.Services.Services
                 v.VetTimeSlot.EndTimeUtc,
                 v.Notes
             );
+
+        private async Task ScheduleVaccinationRemindersAsync(
+            int userId,
+            string animalName,
+            string vaccineName,
+            int vaccinationId,
+            DateTime? nextDateUtc)
+        {
+            if (!nextDateUtc.HasValue)
+                return;
+
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.VaccinationReminder,
+                    userId,
+                    "Vaccination reminder",
+                    $"{animalName} needs {vaccineName} in 7 days, around {nextDateUtc.Value:dd.MM.yyyy}. VAX:{vaccinationId}"
+                ),
+                nextDateUtc.Value.AddDays(-7)
+            );
+
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.VaccinationReminder,
+                    userId,
+                    "Vaccination reminder",
+                    $"{animalName} needs {vaccineName} tomorrow, around {nextDateUtc.Value:dd.MM.yyyy}. VAX:{vaccinationId}"
+                ),
+                nextDateUtc.Value.AddDays(-1)
+            );
+        }
     }
 }

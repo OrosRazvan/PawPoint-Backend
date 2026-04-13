@@ -1,21 +1,22 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Requests;
 using PawPoint.Services.Responses;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class AppointmentService(Context db) : IAppointmentService
+    public sealed class AppointmentService(Context db, INotificationService notificationService) : IAppointmentService
     {
         private readonly Context _db = db;
+        private readonly INotificationService _notificationService = notificationService;
 
         public async Task<IReadOnlyList<VetCabinetListItemResponse>> GetVetCabinetsAsync(
             string? serviceType,
             string? sortBy)
         {
-            // pentru început ignorăm serviceType, dar îl păstrăm dacă vrei să filtrezi prețul mai târziu
             var query = _db.VetCabinets.AsNoTracking();
 
             query = sortBy?.ToLower() switch
@@ -107,7 +108,7 @@ namespace PawPoint.Services.Services
                 .Include(a => a.VetTimeSlot)
                 .Where(a =>
                     a.Animal.UserId == userId &&
-                    a.VetTimeSlot.EndTimeUtc >= cutoff) // doar ultimele 15 zile + viitor
+                    a.VetTimeSlot.EndTimeUtc >= cutoff)
                 .OrderByDescending(a => a.VetTimeSlot.StartTimeUtc)
                 .ToListAsync();
 
@@ -146,7 +147,6 @@ namespace PawPoint.Services.Services
             if (string.IsNullOrWhiteSpace(request.ServiceType))
                 throw new ArgumentException("ServiceType is required.", nameof(request.ServiceType));
 
-            // verificăm animalul să aparțină user-ului (similar cu AnimalService) :contentReference[oaicite:1]{index=1}
             var animal = await _db.Animals
                 .FirstOrDefaultAsync(a => a.Id == request.AnimalId && a.UserId == userId);
 
@@ -165,14 +165,12 @@ namespace PawPoint.Services.Services
             if (slot is null)
                 throw new KeyNotFoundException("Selected time slot not found.");
 
-            // opțional, validare extra că slotul chiar aparține cabinetului
             if (slot.VetCabinetId != request.VetCabinetId)
                 throw new InvalidOperationException("Selected time slot does not belong to the specified cabinet.");
 
             if (slot.BookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected time slot is no longer available.");
 
-            // creezi appointment-ul
             var appointment = new Appointment
             {
                 AnimalId = animal.Id,
@@ -187,11 +185,27 @@ namespace PawPoint.Services.Services
             };
 
             _db.Appointments.Add(appointment);
-
-            // marchezi slotul ca ocupat (sau crești BookedCount)
             slot.BookedCount++;
 
             await _db.SaveChangesAsync();
+
+            await _notificationService.CreateNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AppointmentBooked,
+                    userId,
+                    "Appointment booked",
+                    $"{animal.Name} has been scheduled for {appointment.ServiceType} on {slot.StartTimeUtc:dd.MM.yyyy} at {slot.StartTimeUtc:HH:mm} ({cabinet.Name}). APPT:{appointment.Id}"
+                )
+            );
+
+            await ScheduleAppointmentRemindersAsync(
+                userId,
+                animal.Name,
+                cabinet.Name,
+                appointment.Id,
+                slot.StartTimeUtc
+            );
 
             return new AppointmentResponse(
                 appointment.Id,
@@ -199,11 +213,12 @@ namespace PawPoint.Services.Services
                 animal.Name,
                 cabinet.Id,
                 cabinet.Name,
+                $"{cabinet.Address}, {cabinet.City}",
                 slot.Id,
                 slot.StartTimeUtc,
                 slot.EndTimeUtc,
                 appointment.ServiceType,
-                appointment.EstimatedPriceRon,
+                appointment.EstimatedPriceRon ?? cabinet.BasePriceRon,
                 appointment.Status,
                 appointment.Notify24hInAdvance
             );
@@ -218,13 +233,13 @@ namespace PawPoint.Services.Services
             await CleanupOldAppointmentsAsync();
 
             var nowUtc = DateTime.UtcNow;
-            var cutoff = nowUtc.AddDays(-15); // nu mai vechi de 15 zile
+            var cutoff = nowUtc.AddDays(-15);
 
             var list = await QueryAnimalAppointments(animalId, userId)
                 .Where(a =>
-                    a.VetTimeSlot.StartTimeUtc < nowUtc &&              // trecut
-                    a.VetTimeSlot.EndTimeUtc >= cutoff)                 // dar în ultimele 15 zile
-                .OrderByDescending(a => a.VetTimeSlot.StartTimeUtc)     // cele mai recente primele
+                    a.VetTimeSlot.StartTimeUtc < nowUtc &&
+                    a.VetTimeSlot.EndTimeUtc >= cutoff)
+                .OrderByDescending(a => a.VetTimeSlot.StartTimeUtc)
                 .ToListAsync();
 
             return list.Select(MapAppointment).ToList();
@@ -268,7 +283,8 @@ namespace PawPoint.Services.Services
             if (appointment.Animal.UserId != userId)
                 throw new UnauthorizedAccessException("You cannot modify this appointment.");
 
-            // schimbăm slotul, dacă a fost trimis altul
+            var slotChanged = false;
+
             if (request.VetTimeSlotId.HasValue &&
                 request.VetTimeSlotId.Value != appointment.VetTimeSlotId)
             {
@@ -283,15 +299,14 @@ namespace PawPoint.Services.Services
                 if (newSlot.BookedCount >= newSlot.Capacity)
                     throw new InvalidOperationException("New time slot is fully booked.");
 
-                // eliberăm slotul vechi
                 appointment.VetTimeSlot.BookedCount =
                     Math.Max(0, appointment.VetTimeSlot.BookedCount - 1);
 
-                // ocupăm slotul nou
                 newSlot.BookedCount++;
 
                 appointment.VetTimeSlotId = newSlot.Id;
                 appointment.VetTimeSlot = newSlot;
+                slotChanged = true;
             }
 
             if (request.EstimatedPriceRon.HasValue)
@@ -315,10 +330,32 @@ namespace PawPoint.Services.Services
                 .Include(a => a.VetTimeSlot)
                 .FirstAsync(a => a.Id == appointment.Id);
 
+            if (slotChanged)
+            {
+                await _notificationService.CreateNotificationAsync(
+                    userId,
+                    new NotificationCreateRequest(
+                        NotificationTypeEnum.AppointmentRescheduled,
+                        userId,
+                        "Appointment rescheduled",
+                        $"{updated.Animal.Name}'s appointment has been moved to {updated.VetTimeSlot.StartTimeUtc:dd.MM.yyyy} at {updated.VetTimeSlot.StartTimeUtc:HH:mm} ({updated.VetCabinet.Name}). APPT:{updated.Id}"
+                    )
+                );
+
+                await ScheduleAppointmentRemindersAsync(
+                    userId,
+                    updated.Animal.Name,
+                    updated.VetCabinet.Name,
+                    updated.Id,
+                    updated.VetTimeSlot.StartTimeUtc
+                );
+            }
+
             return MapAppointment(updated);
         }
 
         #region Helpers
+
         private static AppointmentResponse MapAppointment(Appointment a)
            => new(
                a.Id,
@@ -326,11 +363,12 @@ namespace PawPoint.Services.Services
                a.Animal.Name,
                a.VetCabinetId,
                a.VetCabinet.Name,
+               $"{a.VetCabinet.Address}, {a.VetCabinet.City}",
                a.VetTimeSlotId,
                a.VetTimeSlot.StartTimeUtc,
                a.VetTimeSlot.EndTimeUtc,
                a.ServiceType,
-               a.EstimatedPriceRon,
+               a.EstimatedPriceRon ?? a.VetCabinet.BasePriceRon,
                a.Status,
                a.Notify24hInAdvance
            );
@@ -347,7 +385,6 @@ namespace PawPoint.Services.Services
 
         private async Task CleanupOldAppointmentsAsync()
         {
-            // tot ce s-a terminat cu mai mult de 15 zile în urmă
             var cutoff = DateTime.UtcNow.AddDays(-15);
 
             var oldAppointments = await _db.Appointments
@@ -361,6 +398,37 @@ namespace PawPoint.Services.Services
             _db.Appointments.RemoveRange(oldAppointments);
             await _db.SaveChangesAsync();
         }
+
+        private async Task ScheduleAppointmentRemindersAsync(
+            int userId,
+            string animalName,
+            string cabinetName,
+            int appointmentId,
+            DateTime slotStartUtc)
+        {
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AppointmentReminder,
+                    userId,
+                    "Appointment reminder",
+                    $"In 7 days you have an appointment for {animalName} at {slotStartUtc:HH:mm} ({cabinetName}). APPT:{appointmentId}"
+                ),
+                slotStartUtc.AddDays(-7)
+            );
+
+            await _notificationService.ScheduleNotificationAsync(
+                userId,
+                new NotificationCreateRequest(
+                    NotificationTypeEnum.AppointmentReminder,
+                    userId,
+                    "Appointment reminder",
+                    $"Tomorrow you have an appointment for {animalName} at {slotStartUtc:HH:mm} ({cabinetName}). APPT:{appointmentId}"
+                ),
+                slotStartUtc.AddDays(-1)
+            );
+        }
+
         #endregion
     }
 }
