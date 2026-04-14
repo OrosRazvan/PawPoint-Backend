@@ -7,6 +7,11 @@
         string WeightUnit,
         string DateFormat,
         int NotificationPreferenceId,
-        string NotificationPreference
+        string NotificationPreference,
+        bool EnableNotifications,
+        bool VaccinationNotifications,
+        bool AppointmentNotifications,
+        bool DewormingNotifications,
+        string NotificationBadgeMode
     );
 }

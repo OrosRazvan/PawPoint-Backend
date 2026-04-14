@@ -4,6 +4,11 @@
         bool? DarkMode,
         string? TextSize,
         string? WeightUnit,
-        string? DateFormat
+        string? DateFormat,
+        bool? EnableNotifications,
+        bool? VaccinationNotifications,
+        bool? AppointmentNotifications,
+        bool? DewormingNotifications,
+        string? NotificationBadgeMode
     );
 }

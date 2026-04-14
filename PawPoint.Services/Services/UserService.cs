@@ -157,7 +157,12 @@ namespace PawPoint.Services.Services
                 WeightUnit: s?.WeightUnit ?? "kg",
                 DateFormat: s?.DateFormat ?? "DD/MM/YYYY",
                 NotificationPreferenceId: user.NotificationPreferenceId,
-                NotificationPreference: user.NotificationPreference.Name
+                NotificationPreference: user.NotificationPreference.Name,
+                EnableNotifications: s?.EnableNotifications ?? true,
+                VaccinationNotifications: s?.VaccinationNotifications ?? true,
+                AppointmentNotifications: s?.AppointmentNotifications ?? true,
+                DewormingNotifications: s?.DewormingNotifications ?? true,
+                NotificationBadgeMode: s?.NotificationBadgeMode ?? "count"
             );
         }
 
@@ -209,7 +214,12 @@ namespace PawPoint.Services.Services
                     WeightUnit: se?.WeightUnit ?? "kg",
                     DateFormat: se?.DateFormat ?? "DD/MM/YYYY",
                     NotificationPreferenceId: pref.Id,
-                    NotificationPreference: pref.Name
+                    NotificationPreference: pref.Name,
+                    EnableNotifications: se?.EnableNotifications ?? true,
+                    VaccinationNotifications: se?.VaccinationNotifications ?? true,
+                    AppointmentNotifications: se?.AppointmentNotifications ?? true,
+                    DewormingNotifications: se?.DewormingNotifications ?? true,
+                    NotificationBadgeMode: se?.NotificationBadgeMode ?? "count"
                 );
             }
 
@@ -237,7 +247,12 @@ namespace PawPoint.Services.Services
                 WeightUnit: s?.WeightUnit ?? "kg",
                 DateFormat: s?.DateFormat ?? "DD/MM/YYYY",
                 NotificationPreferenceId: pref.Id,
-                NotificationPreference: pref.Name
+                NotificationPreference: pref.Name,
+                EnableNotifications: s?.EnableNotifications ?? true,
+                VaccinationNotifications: s?.VaccinationNotifications ?? true,
+                AppointmentNotifications: s?.AppointmentNotifications ?? true,
+                DewormingNotifications: s?.DewormingNotifications ?? true,
+                NotificationBadgeMode: s?.NotificationBadgeMode ?? "count"
             );
         }
 
