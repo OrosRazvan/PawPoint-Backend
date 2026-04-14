@@ -11,16 +11,17 @@ namespace PawPoint.Services.Services
     {
         private readonly Context _db = db;
 
-        // valori permise
         private static readonly HashSet<string> AllowedTextSizes = new(StringComparer.OrdinalIgnoreCase)
         { "Small", "Medium", "Large" };
 
         private static readonly HashSet<string> AllowedWeightUnits = new(StringComparer.OrdinalIgnoreCase)
         { "kg", "lb" };
 
-        // ține-l simplu acum; poți extinde ulterior
         private static readonly HashSet<string> AllowedDateFormats = new(StringComparer.OrdinalIgnoreCase)
         { "DD/MM/YYYY", "MM/DD/YYYY", "YYYY-MM-DD" };
+
+        private static readonly HashSet<string> AllowedBadgeModes = new(StringComparer.OrdinalIgnoreCase)
+        { "count", "dot" };
 
         public async Task<UserSettingsResponse> GetAsync(int userId)
         {
@@ -30,7 +31,6 @@ namespace PawPoint.Services.Services
                 .AsNoTracking()
                 .FirstOrDefaultAsync(s => s.UserId == userId);
 
-            // dacă nu există, creează default (auto-heal)
             if (settings is null)
             {
                 settings = new UserSettings { UserId = userId };
@@ -82,9 +82,40 @@ namespace PawPoint.Services.Services
                 settings.DateFormat = v.ToUpperInvariant();
             }
 
+            if (request.NotificationBadgeMode is not null)
+            {
+                var v = request.NotificationBadgeMode.Trim();
+                if (!AllowedBadgeModes.Contains(v))
+                    throw new ArgumentException("NotificationBadgeMode must be 'count' or 'dot'.");
+                settings.NotificationBadgeMode = v.ToLowerInvariant();
+            }
+
+            if (request.EnableNotifications.HasValue)
+            {
+                settings.EnableNotifications = request.EnableNotifications.Value;
+
+                if (!settings.EnableNotifications)
+                {
+                    settings.VaccinationNotifications = false;
+                    settings.AppointmentNotifications = false;
+                    settings.DewormingNotifications = false;
+                }
+            }
+
+            if (settings.EnableNotifications)
+            {
+                if (request.VaccinationNotifications.HasValue)
+                    settings.VaccinationNotifications = request.VaccinationNotifications.Value;
+
+                if (request.AppointmentNotifications.HasValue)
+                    settings.AppointmentNotifications = request.AppointmentNotifications.Value;
+
+                if (request.DewormingNotifications.HasValue)
+                    settings.DewormingNotifications = request.DewormingNotifications.Value;
+            }
+
             await _db.SaveChangesAsync();
 
-            // return fresh
             return Map(settings);
         }
 
@@ -101,8 +132,12 @@ namespace PawPoint.Services.Services
                 s.WeightUnit,
                 s.DateFormat,
                 NotificationPreferenceId: 0,
-                NotificationPreference: "All"
+                NotificationPreference: "All",
+                s.EnableNotifications,
+                s.VaccinationNotifications,
+                s.AppointmentNotifications,
+                s.DewormingNotifications,
+                s.NotificationBadgeMode
             );
-
     }
 }
