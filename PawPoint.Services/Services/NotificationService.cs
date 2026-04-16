@@ -67,16 +67,13 @@ namespace PawPoint.Services.Services
             }
         }
 
-        public async SystemTask SoftDeleteNotificationsAsync(int userId, int notificationId)
+        public async Task SoftDeleteNotificationsAsync(int userId, int notificationId)
         {
             var updated = await dbContext.Notifications
                 .Where(n =>
                     n.Id == notificationId &&
                     n.UserId == userId &&
-                    !n.IsDeleted &&
-                    n.IsRead &&
-                    n.ReadAt != null &&
-                    n.ReadAt <= DateTime.UtcNow.AddDays(-1))
+                    !n.IsDeleted)
                 .ExecuteUpdateAsync(u => u.SetProperty(n => n.IsDeleted, true));
 
             if (updated == 0)
