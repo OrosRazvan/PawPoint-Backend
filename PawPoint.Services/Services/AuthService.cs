@@ -242,7 +242,7 @@ namespace PawPoint.Services.Services
 
                 await emailService.SendEmailAsync(
                     toEmail: normalizedEmail,
-                    title: "Reset your Inspire password",
+                    title: "Reset your PawPoint password",
                     textBody: text,
                     htmlBody: html
                 );
@@ -508,7 +508,7 @@ namespace PawPoint.Services.Services
 
             await emailService.SendEmailAsync(
                 toEmail: toEmail,
-                title: "Verify your Inspire account",
+                title: "Verify your PawPoint account",
                 textBody: text,
                 htmlBody: html
             );
