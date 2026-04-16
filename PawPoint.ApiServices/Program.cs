@@ -28,15 +28,10 @@ public class Program
     {
         var builder = WebApplication.CreateBuilder(args);
 
-        // =========================
-        // 1) CONFIG LOADING FIRST
-        // =========================
         var env = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
 
-        // load .env (dacă îl folosești)
         Env.Load(Path.Combine(Directory.GetCurrentDirectory(), "env.env"));
 
-        // IMPORTANT: încarcă json + env vars înainte să citești connection strings
         builder.Configuration
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .AddJsonFile($"appsettings.{env}.json", optional: true, reloadOnChange: true)
@@ -56,32 +51,29 @@ public class Program
             options.AddPolicy("AllowFrontendApp", policy =>
             {
                 policy.WithOrigins(
-                    "http://localhost:5173",
-                    "http://127.0.0.1:5173",
-                    "https://localhost:5001",
-                    "http://localhost:5000")
-                      .AllowAnyHeader()
-                      .AllowAnyMethod();
+                        "http://localhost:5173",
+                        "http://127.0.0.1:5173",
+                        "https://localhost:5001",
+                        "http://localhost:5000")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
             });
 
             options.AddPolicy("AllowDevTools", policy =>
             {
                 policy.WithOrigins(
-                    "https://localhost:5001",
-                    "http://localhost:5000",
-                    "https://scalar.local",
-                    "http://127.0.0.1:5173",
-                    "http://localhost:5173")
-                      .AllowAnyHeader()
-                      .AllowAnyMethod();
+                        "https://localhost:5001",
+                        "http://localhost:5000",
+                        "https://scalar.local",
+                        "http://127.0.0.1:5173",
+                        "http://localhost:5173")
+                    .AllowAnyHeader()
+                    .AllowAnyMethod()
+                    .AllowCredentials();
             });
         });
 
-        // =========================
-        // 2) DATABASE (ONE CS)
-        // =========================
-        // Folosește o singură cheie pentru DB peste tot
-        // (schimbă numele dacă vrei, dar să fie același și la Hangfire)
         var dbConn = builder.Configuration.GetConnectionString("PawPointDB")
                     ?? builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -91,9 +83,6 @@ public class Program
         builder.Services.AddDbContext<Context>(options =>
             options.UseNpgsql(dbConn, x => x.MigrationsAssembly("PawPoint.DB")));
 
-        // =========================
-        // 3) AZURE BLOBS (KEYED)
-        // =========================
         var profilePicsConn = builder.Configuration.GetConnectionString("profile-pics");
         var dataUpdatesConn = builder.Configuration.GetConnectionString("data-updates");
 
@@ -103,7 +92,6 @@ public class Program
         if (string.IsNullOrWhiteSpace(dataUpdatesConn))
             throw new InvalidOperationException("Lipsește ConnectionStrings:data-updates.");
 
-        // doi clienți separați, keyed
         builder.Services.AddKeyedSingleton("profile-pics-client", (_, __) => new BlobServiceClient(profilePicsConn));
         builder.Services.AddKeyedSingleton("data-updates-client", (_, __) => new BlobServiceClient(dataUpdatesConn));
 
@@ -119,9 +107,6 @@ public class Program
             return client.GetBlobContainerClient("data-updates");
         });
 
-        // =========================
-        // 4) OPTIONS / SETTINGS
-        // =========================
         builder.Services.Configure<AppUrls>(builder.Configuration.GetSection("AppUrls"));
         builder.Services.Configure<StorageSettings>(builder.Configuration.GetSection("Storage"));
         builder.Services.Configure<VerificationTokenSettings>(builder.Configuration.GetSection("VerificationTokens"));
@@ -140,9 +125,6 @@ public class Program
                 new AuthenticationHeaderValue("Basic", Convert.ToBase64String(byteArray));
         });
 
-        // =========================
-        // 5) AUTH
-        // =========================
         builder.Services.AddAuthentication(options =>
         {
             options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -186,9 +168,8 @@ public class Program
             };
         });
 
-        // =========================
-        // 6) DI
-        // =========================
+        builder.Services.AddAuthorization();
+
         builder.Services.AddScoped<IDatabaseSeedService, DatabaseSeedService>();
         builder.Services.AddScoped<IPasswordHasher<User>, PasswordHasher<User>>();
         builder.Services.AddScoped<IPasswordService, PasswordService>();
@@ -221,36 +202,19 @@ public class Program
         builder.Services.AddSingleton<IEmailService, EmailService>();
         builder.Services.AddSingleton<ITemplateRenderer, TemplateRenderer>();
 
-        // =========================
-        // 7) HANGFIRE (same DB CS)
-        // =========================
         builder.Services.AddHangfire(cfg =>
         {
             cfg.UseSimpleAssemblyNameTypeSerializer()
                .UseRecommendedSerializerSettings()
                .UsePostgreSqlStorage(dbConn);
         });
+
         builder.Services.AddHangfireServer();
 
         var app = builder.Build();
 
         app.UseExceptionHandler();
         app.MapDefaultEndpoints();
-
-        if (app.Environment.IsDevelopment())
-            app.UseCors("AllowDevTools");
-        else
-            app.UseCors("AllowFrontendApp");
-
-        // =========================
-        // 8) MIGRATE + SEED (startup)
-        // =========================
-        // Dacă vrei strict doar Dev/Staging, pune if în jur.
-        using (var scope = app.Services.CreateScope())
-        {
-            var seedService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedService>();
-            seedService.MigrateDatabase(scope);
-        }
 
         if (app.Environment.IsDevelopment() || app.Environment.IsStaging())
         {
@@ -259,11 +223,21 @@ public class Program
         }
 
         app.UseHttpsRedirection();
+
+        var corsPolicy = app.Environment.IsDevelopment() ? "AllowDevTools" : "AllowFrontendApp";
+        app.UseCors(corsPolicy);
+
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.MapControllers();
-        app.MapHub<NotificationHub>("/hubs/notifications");
+        using (var scope = app.Services.CreateScope())
+        {
+            var seedService = scope.ServiceProvider.GetRequiredService<IDatabaseSeedService>();
+            seedService.MigrateDatabase(scope);
+        }
+
+        app.MapControllers().RequireCors(corsPolicy);
+        app.MapHub<NotificationHub>("/hubs/notifications").RequireCors(corsPolicy);
 
         app.UseHangfireDashboard("/hangfire");
 
