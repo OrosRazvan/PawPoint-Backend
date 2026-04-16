@@ -2,7 +2,7 @@ Verify your email
 
 Hi {{FullName}},
 
-Please confirm your email address to finish setting up your Inspire account.
+Please confirm your email address to finish setting up your PawPoint account.
 
 Confirm here:
 {{VerifyLink}}
