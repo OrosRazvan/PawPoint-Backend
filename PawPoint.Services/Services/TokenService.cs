@@ -13,17 +13,17 @@ namespace PawPoint.Services.Services
     {
         private readonly JwtSettings _jwt = jwtOptions.Value;
 
-        public TokenResponse IssueTokens(int userId, string email)
+        public TokenResponse IssueTokens(int userId, string email, string role)
         {
-            ValidateIssueTokensInput(userId, email);
+            ValidateIssueTokensInput(userId, email, role);
 
             var now = DateTime.UtcNow;
             var accessExp = now.AddMinutes(_jwt.AccessExpiresInMinutes);
             var refreshExp = now.AddMinutes(_jwt.RefreshExpiresInMinutes);
 
             return new TokenResponse(
-                AccessToken: CreateJwt(_jwt.AccessSecret, accessExp, userId, email, "access"),
-                RefreshToken: CreateJwt(_jwt.RefreshSecret, refreshExp, userId, email, "refresh"),
+                AccessToken: CreateJwt(_jwt.AccessSecret, accessExp, userId, email, role, "access"),
+                RefreshToken: CreateJwt(_jwt.RefreshSecret, refreshExp, userId, email, role, "refresh"),
                 AccessExpiresAtUtc: accessExp,
                 RefreshExpiresAtUtc: refreshExp
             );
@@ -35,16 +35,18 @@ namespace PawPoint.Services.Services
         public ClaimsPrincipal? ValidateRefreshToken(string token)
             => ValidateTokenInternal(token, expectedTyp: "refresh", secret: _jwt.RefreshSecret);
 
-        private static void ValidateIssueTokensInput(int userId, string email)
+        private static void ValidateIssueTokensInput(int userId, string email, string role)
         {
             var emailBlank = string.IsNullOrWhiteSpace(email);
             var emailValid = !emailBlank && System.Net.Mail.MailAddress.TryCreate(email, out _);
+            var roleBlank = string.IsNullOrWhiteSpace(role);
 
-            _ = (userId, emailBlank, emailValid) switch
+            _ = (userId, emailBlank, emailValid, roleBlank) switch
             {
-                ( <= 0, _, _) => throw new ArgumentException("userId must be a positive integer.", nameof(userId)),
-                (_, true, _) => throw new ArgumentException("Email is required.", nameof(email)),
-                (_, _, false) => throw new ArgumentException("Email format is invalid.", nameof(email)),
+                ( <= 0, _, _, _) => throw new ArgumentException("userId must be a positive integer.", nameof(userId)),
+                (_, true, _, _) => throw new ArgumentException("Email is required.", nameof(email)),
+                (_, _, false, _) => throw new ArgumentException("Email format is invalid.", nameof(email)),
+                (_, _, _, true) => throw new ArgumentException("Role is required.", nameof(role)),
                 _ => true
             };
         }
@@ -57,15 +59,14 @@ namespace PawPoint.Services.Services
             {
                 ValidateIssuerSigningKey = true,
                 IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
-
                 ValidateIssuer = true,
                 ValidIssuer = _jwt.Issuer,
-
                 ValidateAudience = true,
                 ValidAudience = _jwt.Audience,
-
                 ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero
+                ClockSkew = TimeSpan.Zero,
+                NameClaimType = ClaimTypes.NameIdentifier,
+                RoleClaimType = ClaimTypes.Role
             };
 
             try
@@ -93,14 +94,15 @@ namespace PawPoint.Services.Services
             }
         }
 
-        private string CreateJwt(string secret, DateTime expiresUtc, int userId, string email, string typ)
+        private string CreateJwt(string secret, DateTime expiresUtc, int userId, string email, string role, string typ)
         {
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Email, email),
+                new Claim(ClaimTypes.Role, role),
                 new Claim("typ", typ),
-                new Claim(ClaimTypes.Sid, Guid.NewGuid().ToString("N")), 
+                new Claim(ClaimTypes.Sid, Guid.NewGuid().ToString("N")),
             };
 
             var creds = new SigningCredentials(

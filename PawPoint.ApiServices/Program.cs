@@ -147,7 +147,8 @@ public class Program
                 ValidAudience = jwt.Audience,
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero,
-                NameClaimType = ClaimTypes.NameIdentifier
+                NameClaimType = ClaimTypes.NameIdentifier,
+                RoleClaimType = ClaimTypes.Role
             };
 
             options.Events = new JwtBearerEvents
@@ -186,6 +187,7 @@ public class Program
         builder.Services.AddScoped<IDewormingService, DewormingService>();
         builder.Services.AddScoped<IFeedingService, FeedingService>();
         builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
+        builder.Services.AddScoped<IAdminService, AdminService>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());
