@@ -69,6 +69,7 @@ namespace PawPoint.Services.Services
                 EmailHash = emailHash,
                 PasswordHash = pwdHash,
                 FullName = request.FullName,
+                Role = UserRoleEnum.User,
                 IsEmailConfirmed = false,
                 NotificationPreferenceId = defaultNotifPrefId,
                 CreatedAt = DateTime.UtcNow,
@@ -162,7 +163,7 @@ namespace PawPoint.Services.Services
                 throw new InvalidOperationException("Please verify your email. We've resent the verification link.");
             }
 
-            var tokens = tokenService.IssueTokens(user.Id, normalizedEmail);
+            var tokens = tokenService.IssueTokens(user.Id, normalizedEmail, user.Role.ToString());
 
             return new LoginResponse(
                 UserId: user.Id,
@@ -201,7 +202,7 @@ namespace PawPoint.Services.Services
             }
 
             var normalizedEmail = emailIndex.Normalize(emailFromToken);
-            return tokenService.IssueTokens(user.Id, normalizedEmail);
+            return tokenService.IssueTokens(user.Id, normalizedEmail, user.Role.ToString());
         }
 
         public async Task<ForgotPasswordResponse> ForgotPasswordAsync(ForgotPasswordRequest request)

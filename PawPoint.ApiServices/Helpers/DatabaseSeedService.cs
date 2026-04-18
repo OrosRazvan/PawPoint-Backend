@@ -1,16 +1,25 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.DB.Enums;
+using PawPoint.Services.Interfaces;
 using TaskThreading = System.Threading.Tasks.Task;
 
 namespace PawPoint.ApiServices.Helpers
 {
     public class DatabaseSeedService : IDatabaseSeedService
     {
+        private readonly IServiceProvider _serviceProvider;
+
+        public DatabaseSeedService(IServiceProvider serviceProvider)
+        {
+            _serviceProvider = serviceProvider;
+        }
         public void MigrateDatabase(IServiceScope serviceScope)
         {
-            var context = serviceScope.ServiceProvider.GetRequiredService<Context>();
+             var context = serviceScope.ServiceProvider.GetRequiredService<Context>();
 
             var strat = context.Database.CreateExecutionStrategy();
             strat.Execute(() => context.Database.Migrate());
@@ -40,13 +49,19 @@ namespace PawPoint.ApiServices.Helpers
                 await database.SaveChangesAsync();
             }
 
+            var emailIndex = _serviceProvider.GetRequiredService<IEmailIndexService>();
+            var pii = _serviceProvider.GetRequiredService<IPiiEncryptionService>();
+            var passwordService = _serviceProvider.GetRequiredService<IPasswordService>();
+
+            await EnsureAdminUserAsync(database, emailIndex, pii, passwordService);
+            await database.SaveChangesAsync();
+
             if (!seedRecord.ShouldSeedDatabase)
                 return;
 
             await SeedNotificationPreferences(database);
             await SeedNotificationTypes(database);
             await SeedVerificationTokenTypes(database);
-            await database.SaveChangesAsync();
 
             await SeedVetCabinets(database);
             await database.SaveChangesAsync();
@@ -229,6 +244,72 @@ namespace PawPoint.ApiServices.Helpers
             {
                 await database.VetTimeSlots.AddRangeAsync(newSlots);
             }
+        }
+
+        private static async TaskThreading EnsureAdminUserAsync(
+            Context database,
+            IEmailIndexService emailIndex,
+            IPiiEncryptionService pii,
+            IPasswordService passwordService)
+        {
+            const string adminEmail = "admin@pawpoint.local";
+            const string adminPassword = "Admin123!";
+            const string adminFullName = "PawPoint Admin";
+
+            var normalizedEmail = emailIndex.Normalize(adminEmail);
+            var emailHash = emailIndex.ComputeHash(normalizedEmail);
+
+            var existingAdmin = await database.Users
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u => u.EmailHash == emailHash);
+
+            if (existingAdmin is not null)
+            {
+                if (existingAdmin.Role != UserRoleEnum.Admin)
+                {
+                    existingAdmin.Role = UserRoleEnum.Admin;
+                    existingAdmin.IsEmailConfirmed = true;
+                    existingAdmin.IsDeleted = false;
+                    existingAdmin.UpdatedAt = DateTime.UtcNow;
+                    await database.SaveChangesAsync();
+                }
+
+                return;
+            }
+
+            var defaultPreferenceId = await database.NotificationPreferences
+                .Where(x => x.Name == "All")
+                .Select(x => x.Id)
+                .FirstOrDefaultAsync();
+
+            if (defaultPreferenceId == 0)
+            {
+                var pref = new NotificationPreference
+                {
+                    Name = "All"
+                };
+
+                database.NotificationPreferences.Add(pref);
+                await database.SaveChangesAsync();
+                defaultPreferenceId = pref.Id;
+            }
+
+            var adminUser = new User
+            {
+                Email = pii.Encrypt(normalizedEmail),
+                EmailHash = emailHash,
+                PasswordHash = passwordService.Hash(adminPassword),
+                FullName = adminFullName,
+                Role = UserRoleEnum.Admin,
+                IsEmailConfirmed = true,
+                IsDeleted = false,
+                NotificationPreferenceId = defaultPreferenceId,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+
+            database.Users.Add(adminUser);
+            await database.SaveChangesAsync();
         }
     }
 }
