@@ -68,5 +68,30 @@ namespace PawPoint.ApiServices.Controllers
             await adminService.SoftDeleteUserAsync(id);
             return Ok(new { message = "User deactivated." });
         }
+
+        [HttpGet("contact-messages")]
+        public async Task<IActionResult> GetContactMessages([FromServices] IContactMessageService contactMessageService)
+        {
+            var response = await contactMessageService.GetAllAsync();
+            return Ok(response);
+        }
+
+        [HttpGet("contact-messages/{id:int}")]
+        public async Task<IActionResult> GetContactMessageById(int id, [FromServices] IContactMessageService contactMessageService)
+        {
+            var response = await contactMessageService.GetByIdAsync(id);
+            return Ok(response);
+        }
+
+        [HttpPost("contact-messages/{id:int}/reply")]
+        public async Task<IActionResult> ReplyToContactMessage(
+            int id,
+            [FromBody] ReplyContactMessageRequest request,
+            [FromServices] IContactMessageService contactMessageService)
+        {
+            var userId = GetUserIdFromToken();
+            var response = await contactMessageService.ReplyAsAdminAsync(userId, id, request);
+            return Ok(response);
+        }
     }
 }

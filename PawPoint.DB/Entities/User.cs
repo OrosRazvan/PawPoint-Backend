@@ -41,5 +41,8 @@ namespace PawPoint.DB.Entities
         public ICollection<VerificationToken> VerificationTokens { get; set; } = [];
         public ICollection<Animal> Animals { get; set; } = [];
         public UserSettings? Settings { get; set; }
+
+        public ICollection<ContactMessage> ContactMessages { get; set; } = [];
+        public ICollection<ContactMessageReply> ContactMessageReplies { get; set; } = [];
     }
 }

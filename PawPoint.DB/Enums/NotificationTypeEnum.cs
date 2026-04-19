@@ -27,6 +27,9 @@
 
         ProfileUpdated = 50,
         PasswordChanged = 51,
-        SettingsUpdated = 52
+        SettingsUpdated = 52,
+
+        ContactMessageReceived = 60,
+        ContactMessageReplyReceived = 61
     }
 }
