@@ -188,6 +188,7 @@ public class Program
         builder.Services.AddScoped<IFeedingService, FeedingService>();
         builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
         builder.Services.AddScoped<IAdminService, AdminService>();
+        builder.Services.AddScoped<IContactMessageService, ContactMessageService>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());

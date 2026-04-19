@@ -21,6 +21,8 @@ namespace PawPoint.DB
         public DbSet<Deworming> Dewormings => Set<Deworming>();
         public DbSet<Feeding> Feedings => Set<Feeding>();
         public DbSet<UserSettings> UserSettings => Set<UserSettings>();
+        public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
+        public DbSet<ContactMessageReply> ContactMessageReplies => Set<ContactMessageReply>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -106,6 +108,26 @@ namespace PawPoint.DB
                 .HasForeignKey<UserSettings>(s => s.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            modelBuilder.Entity<ContactMessage>()
+                .HasQueryFilter(x => !x.IsDeleted);
+
+            modelBuilder.Entity<ContactMessage>()
+                .HasOne(x => x.User)
+                .WithMany(u => u.ContactMessages)
+                .HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ContactMessageReply>()
+                .HasOne(x => x.ContactMessage)
+                .WithMany(x => x.Replies)
+                .HasForeignKey(x => x.ContactMessageId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<ContactMessageReply>()
+                .HasOne(x => x.SenderUser)
+                .WithMany(u => u.ContactMessageReplies)
+                .HasForeignKey(x => x.SenderUserId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

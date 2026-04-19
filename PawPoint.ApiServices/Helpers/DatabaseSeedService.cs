@@ -126,7 +126,10 @@ namespace PawPoint.ApiServices.Helpers
 
                 new NotificationType { Id = 50, Name = "ProfileUpdated" },
                 new NotificationType { Id = 51, Name = "PasswordChanged" },
-                new NotificationType { Id = 52, Name = "SettingsUpdated" }
+                new NotificationType { Id = 52, Name = "SettingsUpdated" },
+
+                new NotificationType { Id = 60, Name = "ContactMessageReceived" },
+                new NotificationType { Id = 61, Name = "ContactMessageReplyReceived" }
             };
 
             await database.NotificationTypes.AddRangeAsync(notificationTypes);
