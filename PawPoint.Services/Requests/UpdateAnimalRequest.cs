@@ -1,4 +1,6 @@
-﻿namespace PawPoint.Services.Requests
+﻿using Microsoft.AspNetCore.Http;
+
+namespace PawPoint.Services.Requests
 {
     public sealed class UpdateAnimalRequest
     {
@@ -9,5 +11,8 @@
         public DateTime? BirthDate { get; init; }
         public string? Sex { get; init; }
         public string? MicrochipNumber { get; init; }
+        public IFormFile? Image { get; init; }
+        public bool RemoveImage { get; init; }
+        public int? ImagePositionY { get; init; }
     }
 }

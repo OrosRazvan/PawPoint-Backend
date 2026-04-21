@@ -44,5 +44,7 @@ namespace PawPoint.DB.Entities
 
         public ICollection<ContactMessage> ContactMessages { get; set; } = [];
         public ICollection<ContactMessageReply> ContactMessageReplies { get; set; } = [];
+
+        public ICollection<AssistantConversation> AssistantConversations { get; set; } = [];
     }
 }

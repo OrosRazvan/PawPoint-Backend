@@ -30,6 +30,10 @@ namespace PawPoint.DB.Entities
         [MaxLength(100)]
         public string? MicrochipNumber { get; set; }
 
+        [MaxLength(500)]
+        public string? ImageUrl { get; set; }
+        public int? ImagePositionY { get; set; }
+
         public bool IsDeleted { get; set; } = false;
 
         // legături spre celelalte tabele

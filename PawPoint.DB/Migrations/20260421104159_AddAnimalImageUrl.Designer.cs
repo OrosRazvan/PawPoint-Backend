@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using PawPoint.DB;
@@ -11,9 +12,11 @@ using PawPoint.DB;
 namespace PawPoint.DB.Migrations
 {
     [DbContext(typeof(Context))]
-    partial class ContextModelSnapshot : ModelSnapshot
+    [Migration("20260421104159_AddAnimalImageUrl")]
+    partial class AddAnimalImageUrl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,69 +24,6 @@ namespace PawPoint.DB.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("AssistantConversation", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "UpdatedAtUtc");
-
-                    b.ToTable("AssistantConversations");
-                });
-
-            modelBuilder.Entity("AssistantMessage", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("ConversationId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Intent")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ConversationId", "CreatedAtUtc");
-
-                    b.ToTable("AssistantMessages");
-                });
 
             modelBuilder.Entity("PawPoint.DB.Entities.Animal", b =>
                 {
@@ -99,9 +39,6 @@ namespace PawPoint.DB.Migrations
                     b.Property<string>("Breed")
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
-
-                    b.Property<int?>("ImagePositionY")
-                        .HasColumnType("integer");
 
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
@@ -767,28 +704,6 @@ namespace PawPoint.DB.Migrations
                     b.ToTable("VetTimeSlots");
                 });
 
-            modelBuilder.Entity("AssistantConversation", b =>
-                {
-                    b.HasOne("PawPoint.DB.Entities.User", "User")
-                        .WithMany("AssistantConversations")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("AssistantMessage", b =>
-                {
-                    b.HasOne("AssistantConversation", "Conversation")
-                        .WithMany("Messages")
-                        .HasForeignKey("ConversationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Conversation");
-                });
-
             modelBuilder.Entity("PawPoint.DB.Entities.Animal", b =>
                 {
                     b.HasOne("PawPoint.DB.Entities.User", "User")
@@ -993,11 +908,6 @@ namespace PawPoint.DB.Migrations
                     b.Navigation("VetCabinet");
                 });
 
-            modelBuilder.Entity("AssistantConversation", b =>
-                {
-                    b.Navigation("Messages");
-                });
-
             modelBuilder.Entity("PawPoint.DB.Entities.Animal", b =>
                 {
                     b.Navigation("Appointments");
@@ -1027,8 +937,6 @@ namespace PawPoint.DB.Migrations
             modelBuilder.Entity("PawPoint.DB.Entities.User", b =>
                 {
                     b.Navigation("Animals");
-
-                    b.Navigation("AssistantConversations");
 
                     b.Navigation("ContactMessageReplies");
 
