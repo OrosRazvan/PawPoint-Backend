@@ -14,8 +14,11 @@ using PawPoint.ApiServices.Hubs;
 using PawPoint.Common.Helpers;
 using PawPoint.DB;
 using PawPoint.DB.Entities;
+using PawPoint.Services;
+using PawPoint.Services.Parsing;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Jobs;
+using PawPoint.Services.Parsing;
 using PawPoint.Services.Services;
 using Scalar.AspNetCore;
 using System.Net.Http.Headers;
@@ -84,21 +87,37 @@ public class Program
             options.UseNpgsql(dbConn, x => x.MigrationsAssembly("PawPoint.DB")));
 
         var profilePicsConn = builder.Configuration.GetConnectionString("profile-pics");
+        var animalPicsConn = builder.Configuration.GetConnectionString("animal-pics");
         var dataUpdatesConn = builder.Configuration.GetConnectionString("data-updates");
 
         if (string.IsNullOrWhiteSpace(profilePicsConn))
             throw new InvalidOperationException("Lipsește ConnectionStrings:profile-pics.");
 
+        if (string.IsNullOrWhiteSpace(animalPicsConn))
+            throw new InvalidOperationException("Lipsește ConnectionStrings:animal-pics.");
+
         if (string.IsNullOrWhiteSpace(dataUpdatesConn))
             throw new InvalidOperationException("Lipsește ConnectionStrings:data-updates.");
 
-        builder.Services.AddKeyedSingleton("profile-pics-client", (_, __) => new BlobServiceClient(profilePicsConn));
-        builder.Services.AddKeyedSingleton("data-updates-client", (_, __) => new BlobServiceClient(dataUpdatesConn));
+        builder.Services.AddKeyedSingleton("profile-pics-client", (_, __) =>
+            new BlobServiceClient(profilePicsConn));
+
+        builder.Services.AddKeyedSingleton("animal-pics-client", (_, __) =>
+            new BlobServiceClient(animalPicsConn));
+
+        builder.Services.AddKeyedSingleton("data-updates-client", (_, __) =>
+            new BlobServiceClient(dataUpdatesConn));
 
         builder.Services.AddKeyedSingleton("profile-pics", (sp, _) =>
         {
             var client = sp.GetRequiredKeyedService<BlobServiceClient>("profile-pics-client");
             return client.GetBlobContainerClient("profile-pics");
+        });
+
+        builder.Services.AddKeyedSingleton("animal-pics", (sp, _) =>
+        {
+            var client = sp.GetRequiredKeyedService<BlobServiceClient>("animal-pics-client");
+            return client.GetBlobContainerClient("animal-pics");
         });
 
         builder.Services.AddKeyedSingleton("data-updates", (sp, _) =>
@@ -177,8 +196,13 @@ public class Program
         builder.Services.AddScoped<IAuthService, AuthService>();
         builder.Services.AddScoped<ITokenService, TokenService>();
         builder.Services.AddScoped<IIdentityService, IdentityService>();
+
         builder.Services.AddScoped<IProfilePictureService, ProfilePictureService>();
         builder.Services.AddScoped<IProfilePictureUrlFactory, ProfilePictureUrlFactory>();
+
+        builder.Services.AddScoped<IAnimalPictureService, AnimalPictureService>();
+        builder.Services.AddScoped<AnimalPictureUrlFactory>();
+
         builder.Services.AddScoped<IUserService, UserService>();
         builder.Services.AddScoped<INotificationService, NotificationService>();
         builder.Services.AddScoped<IAnimalService, AnimalService>();
@@ -189,9 +213,13 @@ public class Program
         builder.Services.AddScoped<IUserSettingsService, UserSettingsService>();
         builder.Services.AddScoped<IAdminService, AdminService>();
         builder.Services.AddScoped<IContactMessageService, ContactMessageService>();
+        builder.Services.AddScoped<IAssistantService, AssistantService>();
+        builder.Services.AddScoped<IAssistantDataService, AssistantDataService>();
+        builder.Services.AddScoped<IIntentParser, KeywordIntentParser>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());
+
         builder.Services.AddSingleton<INotificationRealtimeDispatcher, NotificationRealtimeDispatcher>();
 
         builder.Services.AddScoped<DailyNotificationJob>();
@@ -227,7 +255,10 @@ public class Program
 
         app.UseHttpsRedirection();
 
-        var corsPolicy = app.Environment.IsDevelopment() ? "AllowDevTools" : "AllowFrontendApp";
+        var corsPolicy = app.Environment.IsDevelopment()
+            ? "AllowDevTools"
+            : "AllowFrontendApp";
+
         app.UseCors(corsPolicy);
 
         app.UseAuthentication();

@@ -8,6 +8,8 @@
         double? WeightKg,
         DateTime? BirthDate,
         string? Sex,
-        string? MicrochipNumber
+        string? MicrochipNumber,
+        string? ImageUrl,
+        int? ImagePositionY
     );
 }

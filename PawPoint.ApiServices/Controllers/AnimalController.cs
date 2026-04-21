@@ -13,7 +13,7 @@ namespace PawPoint.ApiServices.Controllers
 
         // POST /Animal/create
         [HttpPost("create")]
-        public async Task<IActionResult> Create([FromBody] CreateAnimalRequest request)
+        public async Task<IActionResult> Create([FromForm] CreateAnimalRequest request)
         {
             var userId = GetUserIdFromToken();
             var created = await _animalService.CreateAsync(userId, request);
@@ -41,7 +41,7 @@ namespace PawPoint.ApiServices.Controllers
 
         // PUT /Animal/update/{animalId}
         [HttpPut("update/{animalId:int}")]
-        public async Task<IActionResult> Update(int animalId, [FromBody] UpdateAnimalRequest request)
+        public async Task<IActionResult> Update(int animalId, [FromForm] UpdateAnimalRequest request)
         {
             var userId = GetUserIdFromToken();
             var updated = await _animalService.UpdateAsync(animalId, userId, request);

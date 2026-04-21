@@ -23,6 +23,8 @@ namespace PawPoint.DB
         public DbSet<UserSettings> UserSettings => Set<UserSettings>();
         public DbSet<ContactMessage> ContactMessages => Set<ContactMessage>();
         public DbSet<ContactMessageReply> ContactMessageReplies => Set<ContactMessageReply>();
+        public DbSet<AssistantConversation> AssistantConversations => Set<AssistantConversation>();
+        public DbSet<AssistantMessage> AssistantMessages => Set<AssistantMessage>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -128,6 +130,32 @@ namespace PawPoint.DB
                 .WithMany(u => u.ContactMessageReplies)
                 .HasForeignKey(x => x.SenderUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // User (1) - (many) AssistantConversations
+            modelBuilder.Entity<AssistantConversation>()
+                .HasOne(c => c.User)
+                .WithMany(u => u.AssistantConversations)
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // AssistantConversation (1) - (many) AssistantMessages
+            modelBuilder.Entity<AssistantMessage>()
+                .HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // soft delete pentru conversații
+            modelBuilder.Entity<AssistantConversation>()
+                .HasQueryFilter(c => !c.IsDeleted);
+
+            // index util ca să găsești rapid conversațiile unui user
+            modelBuilder.Entity<AssistantConversation>()
+                .HasIndex(c => new { c.UserId, c.UpdatedAtUtc });
+
+            // index util pentru mesajele din conversație
+            modelBuilder.Entity<AssistantMessage>()
+                .HasIndex(m => new { m.ConversationId, m.CreatedAtUtc });
         }
     }
 }

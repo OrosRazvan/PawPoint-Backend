@@ -8,10 +8,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace PawPoint.Services.Services
 {
-    public sealed class AnimalService(Context db, INotificationService notificationService) : IAnimalService
+    public sealed class AnimalService(
+        Context db,
+        INotificationService notificationService,
+        IAnimalPictureService animalPictureService,
+        AnimalPictureUrlFactory animalPictureUrlFactory) : IAnimalService
     {
         private readonly Context _db = db;
         private readonly INotificationService _notificationService = notificationService;
+        private readonly IAnimalPictureService _animalPictureService = animalPictureService;
+        private readonly AnimalPictureUrlFactory _animalPictureUrlFactory = animalPictureUrlFactory;
 
         public async Task<AnimalResponse?> GetByIdAsync(int animalId, int userId)
         {
@@ -20,7 +26,7 @@ namespace PawPoint.Services.Services
 
             var animal = await _db.Animals
                 .AsNoTracking()
-                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId);
+                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId && !a.IsDeleted);
 
             return animal is null ? null : ToResponse(animal);
         }
@@ -31,7 +37,7 @@ namespace PawPoint.Services.Services
 
             var animals = await _db.Animals
                 .AsNoTracking()
-                .Where(a => a.UserId == userId)
+                .Where(a => a.UserId == userId && !a.IsDeleted)
                 .OrderBy(a => a.Name)
                 .ToListAsync();
 
@@ -45,6 +51,7 @@ namespace PawPoint.Services.Services
 
             var exists = await _db.Animals.AnyAsync(a =>
                 a.UserId == userId &&
+                !a.IsDeleted &&
                 a.Name == request.Name &&
                 a.Species == request.Species &&
                 a.BirthDate == request.BirthDate);
@@ -65,11 +72,19 @@ namespace PawPoint.Services.Services
                 BirthDate = request.BirthDate,
                 Sex = request.Sex?.Trim(),
                 MicrochipNumber = request.MicrochipNumber?.Trim(),
+                ImageUrl = null,
+                ImagePositionY = request.ImagePositionY ?? 50,
                 IsDeleted = false
             };
 
             _db.Animals.Add(animal);
             await _db.SaveChangesAsync();
+
+            if (request.Image is not null)
+            {
+                animal.ImageUrl = await _animalPictureService.UploadAsync(userId, animal.Id, request.Image);
+                await _db.SaveChangesAsync();
+            }
 
             await _notificationService.CreateNotificationAsync(
                 userId,
@@ -91,7 +106,7 @@ namespace PawPoint.Services.Services
             request ??= new UpdateAnimalRequest();
 
             var animal = await _db.Animals
-                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId);
+                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId && !a.IsDeleted);
 
             if (animal is null)
             {
@@ -119,6 +134,25 @@ namespace PawPoint.Services.Services
             if (request.MicrochipNumber is not null)
                 animal.MicrochipNumber = request.MicrochipNumber.Trim();
 
+            if (request.ImagePositionY.HasValue)
+                animal.ImagePositionY = Math.Clamp(request.ImagePositionY.Value, 0 , 100);
+
+            if (request.RemoveImage && !string.IsNullOrWhiteSpace(animal.ImageUrl))
+            {
+                await _animalPictureService.DeleteAsync(animal.ImageUrl);
+                animal.ImageUrl = null;
+            }
+
+            if (request.Image is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(animal.ImageUrl))
+                {
+                    await _animalPictureService.DeleteAsync(animal.ImageUrl);
+                }
+
+                animal.ImageUrl = await _animalPictureService.UploadAsync(userId, animal.Id, request.Image);
+            }
+
             await _db.SaveChangesAsync();
 
             await _notificationService.CreateNotificationAsync(
@@ -140,7 +174,7 @@ namespace PawPoint.Services.Services
             if (animalId <= 0) throw new ArgumentOutOfRangeException(nameof(animalId));
 
             var animal = await _db.Animals
-                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId);
+                .FirstOrDefaultAsync(a => a.Id == animalId && a.UserId == userId && !a.IsDeleted);
 
             if (animal is null)
             {
@@ -148,6 +182,12 @@ namespace PawPoint.Services.Services
             }
 
             var animalName = animal.Name;
+
+            if (!string.IsNullOrWhiteSpace(animal.ImageUrl))
+            {
+                await _animalPictureService.DeleteAsync(animal.ImageUrl);
+                animal.ImageUrl = null;
+            }
 
             animal.IsDeleted = true;
             await _db.SaveChangesAsync();
@@ -182,7 +222,7 @@ namespace PawPoint.Services.Services
                 throw new ArgumentException("Species is required.", nameof(req.Species));
         }
 
-        private static AnimalResponse ToResponse(Animal animal) =>
+        private AnimalResponse ToResponse(Animal animal) =>
             new(
                 animal.Id,
                 animal.Name,
@@ -191,7 +231,9 @@ namespace PawPoint.Services.Services
                 animal.WeightKg,
                 animal.BirthDate,
                 animal.Sex,
-                animal.MicrochipNumber
+                animal.MicrochipNumber,
+                _animalPictureUrlFactory.Build(animal.ImageUrl),
+                animal.ImagePositionY ?? 50
             );
 
         #endregion

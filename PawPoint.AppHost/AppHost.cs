@@ -8,6 +8,7 @@ var db = builder.AddPostgres("db")
 var storage = builder.AddAzureStorage("storage");
 var blobs = storage.AddBlobs("profile-pics");
 var filesBlobs = storage.AddBlobs("data-updates");
+var animalPics = storage.AddBlobs("animal-pics");
 storage.RunAsEmulator(az => az.WithDataVolume());
 
 var _ = builder.AddProject<Projects.PawPoint_ApiServices>("apiservice")
