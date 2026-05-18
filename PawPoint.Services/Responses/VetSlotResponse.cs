@@ -4,6 +4,8 @@
         int Id,
         DateTime StartTimeUtc,
         DateTime EndTimeUtc,
-        bool IsAvailable
+        int Capacity,
+        int BookedCount,
+        int AvailableCount
     );
 }

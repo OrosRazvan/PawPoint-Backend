@@ -10,6 +10,7 @@ namespace PawPoint.Services.Interfaces
             string? sortBy);
 
         Task<VetAvailabilityResponse> GetAvailabilityAsync(
+            int userId,
             int vetCabinetId,
             DateOnly fromDate,
             DateOnly toDate);

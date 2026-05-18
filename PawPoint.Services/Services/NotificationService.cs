@@ -155,10 +155,6 @@ namespace PawPoint.Services.Services
 
         private async SystemTask PushRealtimeAsync(Notification n, NotificationTypeEnum typeEnum)
         {
-            // AsNoTracking: n vine tracked, dar e ok; ne trebuie NotificationType.Name pentru response
-            // Dacă nu ai navigation loaded, poți face load:
-            // await dbContext.Entry(n).Reference(x => x.NotificationType).LoadAsync();
-
             await realtime.PushToUserAsync(n.UserId, new
             {
                 id = n.Id,
