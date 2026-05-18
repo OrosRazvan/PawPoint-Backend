@@ -192,6 +192,8 @@ namespace PawPoint.Services.Services
             }
 
             var user = await db.Users.FindAsync(userId);
+
+
             if (user is null)
             {
                 throw new InvalidOperationException("User not found.");
