@@ -43,6 +43,7 @@ namespace PawPoint.Services.Services
         }
 
         public async Task<VetAvailabilityResponse> GetAvailabilityAsync(
+            int userId,
             int vetCabinetId,
             DateOnly fromDate,
             DateOnly toDate)
@@ -58,38 +59,78 @@ namespace PawPoint.Services.Services
                 throw new KeyNotFoundException("Vet cabinet not found.");
 
             var fromUtc = fromDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-            var toUtc = toDate
-                .ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc);
+            var toUtc = toDate.ToDateTime(new TimeOnly(23, 59, 59), DateTimeKind.Utc);
 
             var slots = await _db.VetTimeSlots
                 .AsNoTracking()
                 .Where(s =>
                     s.VetCabinetId == vetCabinetId &&
                     s.StartTimeUtc >= fromUtc &&
-                    s.StartTimeUtc <= toUtc &&
-                    s.BookedCount < s.Capacity)
+                    s.StartTimeUtc <= toUtc)
                 .OrderBy(s => s.StartTimeUtc)
                 .ToListAsync();
 
-            var days = slots
-                .GroupBy(s => DateOnly.FromDateTime(s.StartTimeUtc))
+            var slotIds = slots.Select(s => s.Id).ToList();
+
+            var bookedCounts = await _db.Appointments
+                .AsNoTracking()
+                .Where(a =>
+                    slotIds.Contains(a.VetTimeSlotId) &&
+                    a.Status != "Cancelled")
+                .GroupBy(a => a.VetTimeSlotId)
+                .Select(g => new
+                {
+                    VetTimeSlotId = g.Key,
+                    Count = g.Count()
+                })
+                .ToDictionaryAsync(x => x.VetTimeSlotId, x => x.Count);
+
+            var userBookedSlotIds = await _db.Appointments
+                .AsNoTracking()
+                .Where(a =>
+                    slotIds.Contains(a.VetTimeSlotId) &&
+                    a.Animal.UserId == userId &&
+                    a.Status != "Cancelled")
+                .Select(a => a.VetTimeSlotId)
+                .ToListAsync();
+
+            var availableSlots = slots
+                .Where(s => !userBookedSlotIds.Contains(s.Id))
+                .Select(slot =>
+                {
+                    var bookedCount = bookedCounts.TryGetValue(slot.Id, out var count)
+                        ? count
+                        : 0;
+
+                    var availableCount = Math.Max(0, slot.Capacity - bookedCount);
+
+                    return new
+                    {
+                        Slot = slot,
+                        BookedCount = bookedCount,
+                        AvailableCount = availableCount
+                    };
+                })
+                .Where(x => x.AvailableCount > 0)
+                .ToList();
+
+            var days = availableSlots
+                .GroupBy(x => DateOnly.FromDateTime(x.Slot.StartTimeUtc))
                 .Select(g => new VetDayAvailabilityResponse(
                     g.Key,
-                    g.Select(s => new VetSlotResponse(
-                        s.Id,
-                        s.StartTimeUtc,
-                        s.EndTimeUtc,
-                        true
+                    g.Select(x => new VetSlotResponse(
+                        x.Slot.Id,
+                        x.Slot.StartTimeUtc,
+                        x.Slot.EndTimeUtc,
+                        x.Slot.Capacity,
+                        x.BookedCount,
+                        x.AvailableCount
                     )).ToList()
                 ))
                 .OrderBy(d => d.Date)
                 .ToList();
 
-            return new VetAvailabilityResponse(
-                cabinet.Id,
-                cabinet.Name,
-                days
-            );
+            return new VetAvailabilityResponse(cabinet.Id, cabinet.Name, days);
         }
 
         public async Task<IReadOnlyList<AppointmentResponse>> GetAllForUserAsync(int userId)
@@ -168,7 +209,12 @@ namespace PawPoint.Services.Services
             if (slot.VetCabinetId != request.VetCabinetId)
                 throw new InvalidOperationException("Selected time slot does not belong to the specified cabinet.");
 
-            if (slot.BookedCount >= slot.Capacity)
+            var bookedCount = await _db.Appointments
+            .CountAsync(a =>
+                a.VetTimeSlotId == slot.Id &&
+                a.Status != "Cancelled");
+
+            if (bookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected time slot is no longer available.");
 
             var appointment = new Appointment
