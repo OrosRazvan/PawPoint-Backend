@@ -11,8 +11,6 @@ namespace PawPoint.Services.Requests
         public int VetCabinetId { get; set; }
         public int VetTimeSlotId { get; set; }
 
-        public int IntervalDays { get; set; }
-
         public string? Notes { get; set; }
     }
 }

@@ -1,4 +1,20 @@
 ﻿namespace PawPoint.Services.Requests
 {
-    public record UpdateUserSettingsRequest(int NotificationPreferenceId);
+    public record UpdateUserSettingsRequest(
+        int NotificationPreferenceId,
+
+        bool? DarkMode,
+        string? TextSize,
+        string? WeightUnit,
+        string? DateFormat,
+
+        string? Currency,
+
+        bool? EnableNotifications,
+        bool? VaccinationNotifications,
+        bool? AppointmentNotifications,
+        bool? DewormingNotifications,
+
+        string? NotificationBadgeMode
+    );
 }

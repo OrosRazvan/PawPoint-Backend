@@ -1,10 +1,12 @@
-﻿namespace PawPoint.Services.Responses
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Responses
 {
     public sealed record VaccinationResponse(
         int Id,
         int AnimalId,
         string AnimalName,
-        string VaccineName,
+        VaccineType VaccineType,
         DateTime? LastDate,
         DateTime? NextDate,
         int VetCabinetId,
@@ -12,6 +14,8 @@
         int VetTimeSlotId,
         DateTime SlotStartUtc,
         DateTime SlotEndUtc,
+        decimal? Price,
+        Currency Currency,
         string? Notes
     );
 }

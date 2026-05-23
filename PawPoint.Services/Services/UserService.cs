@@ -153,6 +153,7 @@ namespace PawPoint.Services.Services
             return new UserSettingsResponse(
                 UserId: user.Id,
                 DarkMode: s?.DarkMode ?? false,
+                Currency: s?.Currency ?? "EUR",
                 TextSize: s?.TextSize ?? "Medium",
                 WeightUnit: s?.WeightUnit ?? "kg",
                 DateFormat: s?.DateFormat ?? "DD/MM/YYYY",
@@ -197,34 +198,51 @@ namespace PawPoint.Services.Services
             var pref = await _db.NotificationPreferences
                 .FirstOrDefaultAsync(p => p.Id == request.NotificationPreferenceId);
 
+            user.Settings ??= new UserSettings();
+
+            var settings = user.Settings;
+
+            if (request.DarkMode.HasValue)
+                settings.DarkMode = request.DarkMode.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.TextSize))
+                settings.TextSize = request.TextSize;
+
+            if (!string.IsNullOrWhiteSpace(request.WeightUnit))
+                settings.WeightUnit = request.WeightUnit;
+
+            if (!string.IsNullOrWhiteSpace(request.DateFormat))
+                settings.DateFormat = request.DateFormat;
+
+            if (!string.IsNullOrWhiteSpace(request.Currency))
+                settings.Currency = request.Currency.Trim().ToUpper();
+
+            if (request.EnableNotifications.HasValue)
+                settings.EnableNotifications = request.EnableNotifications.Value;
+
+            if (request.VaccinationNotifications.HasValue)
+                settings.VaccinationNotifications = request.VaccinationNotifications.Value;
+
+            if (request.AppointmentNotifications.HasValue)
+                settings.AppointmentNotifications = request.AppointmentNotifications.Value;
+
+            if (request.DewormingNotifications.HasValue)
+                settings.DewormingNotifications = request.DewormingNotifications.Value;
+
+            if (!string.IsNullOrWhiteSpace(request.NotificationBadgeMode))
+                settings.NotificationBadgeMode = request.NotificationBadgeMode;
+
             if (pref is null)
             {
                 throw new KeyNotFoundException(
                     $"Notification preference with id {request.NotificationPreferenceId} was not found.");
             }
 
-            if (user.NotificationPreferenceId == pref.Id)
+            if (user.NotificationPreferenceId != pref.Id)
             {
-                var se = user.Settings;
-
-                return new UserSettingsResponse(
-                    UserId: user.Id,
-                    DarkMode: se?.DarkMode ?? false,
-                    TextSize: se?.TextSize ?? "Medium",
-                    WeightUnit: se?.WeightUnit ?? "kg",
-                    DateFormat: se?.DateFormat ?? "DD/MM/YYYY",
-                    NotificationPreferenceId: pref.Id,
-                    NotificationPreference: pref.Name,
-                    EnableNotifications: se?.EnableNotifications ?? true,
-                    VaccinationNotifications: se?.VaccinationNotifications ?? true,
-                    AppointmentNotifications: se?.AppointmentNotifications ?? true,
-                    DewormingNotifications: se?.DewormingNotifications ?? true,
-                    NotificationBadgeMode: se?.NotificationBadgeMode ?? "count"
-                );
+                user.NotificationPreferenceId = pref.Id;
+                user.NotificationPreference = pref;
             }
-
-            user.NotificationPreferenceId = pref.Id;
-            user.NotificationPreference = pref;
 
             await _db.SaveChangesAsync();
 
@@ -243,6 +261,7 @@ namespace PawPoint.Services.Services
             return new UserSettingsResponse(
                 UserId: user.Id,
                 DarkMode: s?.DarkMode ?? false,
+                Currency: s?.Currency ?? "EUR",
                 TextSize: s?.TextSize ?? "Medium",
                 WeightUnit: s?.WeightUnit ?? "kg",
                 DateFormat: s?.DateFormat ?? "DD/MM/YYYY",

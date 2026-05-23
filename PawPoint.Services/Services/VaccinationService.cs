@@ -23,7 +23,7 @@ namespace PawPoint.Services.Services
                 .Where(v => v.Animal.UserId == userId)
                 .OrderBy(v => v.NextDate ?? DateTime.MaxValue)
                 .ThenBy(v => v.Animal.Name)
-                .ThenBy(v => v.VaccineName)
+                .ThenBy(v => v.VaccineType)
                 .ToListAsync();
 
             return list.Select(Map).ToList();
@@ -38,7 +38,7 @@ namespace PawPoint.Services.Services
                 .Include(v => v.VetTimeSlot)
                 .Where(v => v.Animal.UserId == userId && v.AnimalId == animalId)
                 .OrderBy(v => v.NextDate ?? DateTime.MaxValue)
-                .ThenBy(v => v.VaccineName)
+                .ThenBy(v => v.VaccineType)
                 .ToListAsync();
 
             return list.Select(Map).ToList();
@@ -53,14 +53,28 @@ namespace PawPoint.Services.Services
                 .Include(v => v.VetTimeSlot)
                 .FirstOrDefaultAsync(v => v.Id == vaccinationId && v.Animal.UserId == userId);
 
-            if (vax is null) throw new KeyNotFoundException("Vaccination not found.");
+            if (vax is null)
+                throw new KeyNotFoundException("Vaccination not found.");
+
             return Map(vax);
         }
 
         public async Task<VaccinationResponse> CreateAsync(int userId, CreateVaccinationRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.VaccineName))
-                throw new ArgumentException("VaccineName is required.");
+            if (request is null)
+                throw new ArgumentNullException(nameof(request));
+
+            if (userId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(userId));
+
+            if (request.AnimalId <= 0)
+                throw new ArgumentException("AnimalId is required.");
+
+            if (request.VetCabinetId <= 0)
+                throw new ArgumentException("VetCabinetId is required.");
+
+            if (request.VetTimeSlotId <= 0)
+                throw new ArgumentException("VetTimeSlotId is required.");
 
             if (request.LastDate.HasValue && request.NextDate.HasValue &&
                 request.NextDate.Value < request.LastDate.Value)
@@ -69,17 +83,20 @@ namespace PawPoint.Services.Services
             var animal = await _db.Animals
                 .FirstOrDefaultAsync(a => a.Id == request.AnimalId && a.UserId == userId);
 
-            if (animal is null) throw new KeyNotFoundException("Animal not found for current user.");
+            if (animal is null)
+                throw new KeyNotFoundException("Animal not found for current user.");
 
             var cabinet = await _db.VetCabinets
                 .FirstOrDefaultAsync(c => c.Id == request.VetCabinetId);
 
-            if (cabinet is null) throw new KeyNotFoundException("Vet cabinet not found.");
+            if (cabinet is null)
+                throw new KeyNotFoundException("Vet cabinet not found.");
 
             var slot = await _db.VetTimeSlots
                 .FirstOrDefaultAsync(s => s.Id == request.VetTimeSlotId);
 
-            if (slot is null) throw new KeyNotFoundException("Time slot not found.");
+            if (slot is null)
+                throw new KeyNotFoundException("Time slot not found.");
 
             if (slot.VetCabinetId != request.VetCabinetId)
                 throw new ArgumentException("Selected slot does not belong to selected cabinet.");
@@ -90,16 +107,25 @@ namespace PawPoint.Services.Services
             if (slot.StartTimeUtc <= DateTime.UtcNow)
                 throw new InvalidOperationException("You can only book future slots.");
 
+            var price = await _db.VetServicePrices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.VetCabinetId == cabinet.Id &&
+                    p.ServiceType == "Vaccination" &&
+                    p.VaccineType == request.VaccineType);
+
             slot.BookedCount += 1;
 
             var vaccination = new Vaccination
             {
                 AnimalId = animal.Id,
-                VaccineName = request.VaccineName.Trim(),
+                VaccineType = request.VaccineType,
                 VetCabinetId = cabinet.Id,
                 VetTimeSlotId = slot.Id,
                 LastDate = request.LastDate,
                 NextDate = request.NextDate,
+                Price = price?.Price,
+                Currency = price?.Currency ?? Currency.Eur,
                 Notes = request.Notes?.Trim()
             };
 
@@ -112,14 +138,14 @@ namespace PawPoint.Services.Services
                     NotificationTypeEnum.VaccinationBooked,
                     userId,
                     "Vaccination booked",
-                    $"{animal.Name} has been scheduled for {vaccination.VaccineName} on {slot.StartTimeUtc:dd.MM.yyyy}. VAX:{vaccination.Id}"
+                    $"{animal.Name} has been scheduled for {vaccination.VaccineType} on {slot.StartTimeUtc:dd.MM.yyyy}. VAX:{vaccination.Id}"
                 )
             );
 
             await ScheduleVaccinationRemindersAsync(
                 userId,
                 animal.Name,
-                vaccination.VaccineName,
+                vaccination.VaccineType.ToString(),
                 vaccination.Id,
                 vaccination.NextDate
             );
@@ -134,31 +160,105 @@ namespace PawPoint.Services.Services
             return Map(created);
         }
 
-        public async Task<VaccinationResponse> UpdateAsync(int userId, int vaccinationId, UpdateVaccinationRequest request)
+        public async Task<VaccinationResponse> UpdateAsync(
+    int userId,
+    int vaccinationId,
+    UpdateVaccinationRequest request)
         {
+            if (request is null)
+                throw new ArgumentNullException(nameof(request));
+
             var vax = await _db.Vaccinations
                 .Include(v => v.Animal)
                 .Include(v => v.VetCabinet)
                 .Include(v => v.VetTimeSlot)
                 .FirstOrDefaultAsync(v => v.Id == vaccinationId);
 
-            if (vax is null) throw new KeyNotFoundException("Vaccination not found.");
-            if (vax.Animal.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
+            if (vax is null)
+                throw new KeyNotFoundException("Vaccination not found.");
 
-            if (request.VaccineName is not null)
+            if (vax.Animal.UserId != userId)
+                throw new UnauthorizedAccessException("Not allowed.");
+
+            if (request.AnimalId.HasValue && request.AnimalId.Value != vax.AnimalId)
             {
-                if (string.IsNullOrWhiteSpace(request.VaccineName))
-                    throw new ArgumentException("VaccineName cannot be empty.");
-                vax.VaccineName = request.VaccineName.Trim();
+                var animal = await _db.Animals.FirstOrDefaultAsync(a =>
+                    a.Id == request.AnimalId.Value &&
+                    a.UserId == userId &&
+                    !a.IsDeleted);
+
+                if (animal is null)
+                    throw new KeyNotFoundException("Animal not found for current user.");
+
+                vax.AnimalId = animal.Id;
+                vax.Animal = animal;
             }
 
-            vax.LastDate = request.LastDate;
-            vax.NextDate = request.NextDate;
-            vax.Notes = request.Notes?.Trim();
+            if (request.VaccineType.HasValue)
+                vax.VaccineType = request.VaccineType.Value;
 
-            if (vax.LastDate.HasValue && vax.NextDate.HasValue &&
+            if (request.VetTimeSlotId.HasValue &&
+                request.VetTimeSlotId.Value != vax.VetTimeSlotId)
+            {
+                var newSlot = await _db.VetTimeSlots
+                    .Include(s => s.VetCabinet)
+                    .FirstOrDefaultAsync(s => s.Id == request.VetTimeSlotId.Value);
+
+                if (newSlot is null)
+                    throw new KeyNotFoundException("Selected time slot not found.");
+
+                if (request.VetCabinetId.HasValue &&
+                    newSlot.VetCabinetId != request.VetCabinetId.Value)
+                    throw new InvalidOperationException("Selected time slot does not belong to selected cabinet.");
+
+                if (newSlot.StartTimeUtc <= DateTime.UtcNow)
+                    throw new InvalidOperationException("You can only book future slots.");
+
+                if (newSlot.BookedCount >= newSlot.Capacity)
+                    throw new InvalidOperationException("Selected slot is full.");
+
+                vax.VetTimeSlot.BookedCount =
+                    Math.Max(0, vax.VetTimeSlot.BookedCount - 1);
+
+                newSlot.BookedCount += 1;
+
+                vax.VetTimeSlotId = newSlot.Id;
+                vax.VetTimeSlot = newSlot;
+
+                vax.VetCabinetId = newSlot.VetCabinetId;
+                vax.VetCabinet = newSlot.VetCabinet;
+
+                vax.LastDate = newSlot.StartTimeUtc;
+            }
+            else if (request.VetCabinetId.HasValue &&
+                     request.VetCabinetId.Value != vax.VetCabinetId)
+            {
+                throw new InvalidOperationException("To change the cabinet, select a new time slot from that cabinet.");
+            }
+
+            if (request.LastDate.HasValue)
+                vax.LastDate = request.LastDate.Value;
+
+            if (request.NextDate.HasValue)
+                vax.NextDate = request.NextDate.Value;
+
+            if (vax.LastDate.HasValue &&
+                vax.NextDate.HasValue &&
                 vax.NextDate.Value < vax.LastDate.Value)
                 throw new ArgumentException("NextDateUtc must be >= LastDateUtc.");
+
+            var price = await _db.VetServicePrices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.VetCabinetId == vax.VetCabinetId &&
+                    p.ServiceType == "Vaccination" &&
+                    p.VaccineType == vax.VaccineType);
+
+            vax.Price = price?.Price;
+            vax.Currency = price?.Currency ?? Currency.Eur;
+
+            if (request.Notes is not null)
+                vax.Notes = request.Notes.Trim();
 
             await _db.SaveChangesAsync();
 
@@ -168,14 +268,14 @@ namespace PawPoint.Services.Services
                     NotificationTypeEnum.VaccinationUpdated,
                     userId,
                     "Vaccination updated",
-                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineName}) has been updated. VAX:{vax.Id}"
+                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineType}) has been updated. VAX:{vax.Id}"
                 )
             );
 
             await ScheduleVaccinationRemindersAsync(
                 userId,
                 vax.Animal.Name,
-                vax.VaccineName,
+                vax.VaccineType.ToString(),
                 vax.Id,
                 vax.NextDate
             );
@@ -197,8 +297,11 @@ namespace PawPoint.Services.Services
                 .Include(v => v.VetTimeSlot)
                 .FirstOrDefaultAsync(v => v.Id == vaccinationId);
 
-            if (vax is null) return;
-            if (vax.Animal.UserId != userId) throw new UnauthorizedAccessException("Not allowed.");
+            if (vax is null)
+                return;
+
+            if (vax.Animal.UserId != userId)
+                throw new UnauthorizedAccessException("Not allowed.");
 
             await _notificationService.CreateNotificationAsync(
                 userId,
@@ -206,7 +309,7 @@ namespace PawPoint.Services.Services
                     NotificationTypeEnum.VaccinationCancelled,
                     userId,
                     "Vaccination removed",
-                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineName}) has been removed. VAX:{vax.Id}"
+                    $"{vax.Animal.Name}'s vaccination ({vax.VaccineType}) has been removed. VAX:{vax.Id}"
                 )
             );
 
@@ -222,7 +325,7 @@ namespace PawPoint.Services.Services
                 v.Id,
                 v.AnimalId,
                 v.Animal.Name,
-                v.VaccineName,
+                v.VaccineType,
                 v.LastDate,
                 v.NextDate,
                 v.VetCabinetId,
@@ -230,6 +333,8 @@ namespace PawPoint.Services.Services
                 v.VetTimeSlotId,
                 v.VetTimeSlot.StartTimeUtc,
                 v.VetTimeSlot.EndTimeUtc,
+                v.Price,
+                v.Currency,
                 v.Notes
             );
 

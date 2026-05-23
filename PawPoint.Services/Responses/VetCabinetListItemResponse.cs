@@ -1,4 +1,6 @@
-﻿namespace PawPoint.Services.Responses
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Responses
 {
     public sealed record VetCabinetListItemResponse(
         int Id,
@@ -9,6 +11,7 @@
         string? Website,
         double Rating,
         double DistanceKm,
-        decimal BasePriceRon
+        decimal? Price,
+        Currency Currency
     );
 }

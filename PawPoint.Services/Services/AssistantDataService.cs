@@ -126,7 +126,7 @@ public class AssistantDataService : IAssistantDataService
                 Id = v.Id,
                 PetId = v.AnimalId,
                 PetName = v.Animal.Name,
-                VaccineName = v.VaccineName,
+                VaccineName = v.VaccineType.ToString(),
                 DateGiven = v.LastDate ?? v.VetTimeSlot.StartTimeUtc,
                 NextDueDate = v.NextDate,
                 VetName = v.VeterinarianName,
@@ -156,7 +156,9 @@ public class AssistantDataService : IAssistantDataService
                 DewormingType = d.Type.ToString(),
                 DateGiven = d.Date,
                 NextDueDate = d.NextDate,
-                IntervalDays = d.IntervalDays,
+                IntervalDays = d.NextDate.HasValue
+                    ? (d.NextDate.Value - d.Date).Days
+                    : 0,
                 ProductName = null,
                 VetName = d.VetCabinet.Name,
                 Notes = d.Notes

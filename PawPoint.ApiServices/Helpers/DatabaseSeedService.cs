@@ -17,9 +17,10 @@ namespace PawPoint.ApiServices.Helpers
         {
             _serviceProvider = serviceProvider;
         }
+
         public void MigrateDatabase(IServiceScope serviceScope)
         {
-             var context = serviceScope.ServiceProvider.GetRequiredService<Context>();
+            var context = serviceScope.ServiceProvider.GetRequiredService<Context>();
 
             var strat = context.Database.CreateExecutionStrategy();
             strat.Execute(() => context.Database.Migrate());
@@ -37,8 +38,6 @@ namespace PawPoint.ApiServices.Helpers
             }
             catch (PostgresException ex) when (ex.SqlState == "42P01")
             {
-                // SeedStatuses nu există -> migrațiile nu au creat schema (încă).
-                // Nu mai crăpăm aplicația.
                 return;
             }
 
@@ -66,6 +65,9 @@ namespace PawPoint.ApiServices.Helpers
             await SeedVetCabinets(database);
             await database.SaveChangesAsync();
 
+            await SeedVetServicePrices(database);
+            await database.SaveChangesAsync();
+
             await SeedVetTimeSlots(database);
             await database.SaveChangesAsync();
 
@@ -73,88 +75,34 @@ namespace PawPoint.ApiServices.Helpers
             await database.SaveChangesAsync();
         }
 
-        private static async TaskThreading SeedNotificationPreferences(Context database)
-        {
-            var notificationPreferences = new List<NotificationPreference>
-            {
-                new NotificationPreference {Name = "All" },
-                new NotificationPreference {Name = "InvitesOnly" },
-                new NotificationPreference {Name = "Mute" }
-            };
-            await database.NotificationPreferences.AddRangeAsync(notificationPreferences);
-        }
-
-        private static async TaskThreading SeedVerificationTokenTypes(Context database)
-        {
-            var verificationTokenTypes = new List<VerificationTokenType>
-            {
-                new VerificationTokenType {Name = "ForgotPasswordToken" },
-                new VerificationTokenType {Name = "EmailVerificationToken" }
-            };
-            await database.VerificationTokenTypes.AddRangeAsync(verificationTokenTypes);
-        }
-
-        private static async TaskThreading SeedNotificationTypes(Context database)
-        {
-            if (await database.NotificationTypes.AnyAsync())
-                return;
-
-            var notificationTypes = new List<NotificationType>
-            {
-                new NotificationType { Id = 1,  Name = "AppointmentBooked" },
-                new NotificationType { Id = 2,  Name = "AppointmentReminder" },
-                new NotificationType { Id = 3,  Name = "AppointmentRescheduled" },
-                new NotificationType { Id = 4,  Name = "AppointmentCancelled" },
-
-                new NotificationType { Id = 10, Name = "VaccinationBooked" },
-                new NotificationType { Id = 11, Name = "VaccinationReminder" },
-                new NotificationType { Id = 12, Name = "VaccinationDue" },
-                new NotificationType { Id = 13, Name = "VaccinationUpdated" },
-                new NotificationType { Id = 14, Name = "VaccinationCancelled" },
-
-                new NotificationType { Id = 20, Name = "DewormingBooked" },
-                new NotificationType { Id = 21, Name = "DewormingReminder" },
-                new NotificationType { Id = 22, Name = "DewormingDue" },
-                new NotificationType { Id = 23, Name = "DewormingUpdated" },
-                new NotificationType { Id = 24, Name = "DewormingCancelled" },
-
-                new NotificationType { Id = 30, Name = "FeedingReminder" },
-
-                new NotificationType { Id = 40, Name = "AnimalCreated" },
-                new NotificationType { Id = 41, Name = "AnimalUpdated" },
-                new NotificationType { Id = 42, Name = "AnimalDeleted" },
-
-                new NotificationType { Id = 50, Name = "ProfileUpdated" },
-                new NotificationType { Id = 51, Name = "PasswordChanged" },
-                new NotificationType { Id = 52, Name = "SettingsUpdated" },
-
-                new NotificationType { Id = 60, Name = "ContactMessageReceived" },
-                new NotificationType { Id = 61, Name = "ContactMessageReplyReceived" }
-            };
-
-            await database.NotificationTypes.AddRangeAsync(notificationTypes);
-            await database.SaveChangesAsync();
-        }
-
         private static async TaskThreading SeedVetCabinets(Context database)
         {
             var cabinets = new List<VetCabinet>
             {
-                new() { Name = "HappyPaws Clinic", Address = "Str. Mihai Eminescu 15", City = "Cluj-Napoca", PhoneNumber="0721 111 222", Website="happypaws.ro", Rating = 4.7, DistanceKm = 3.2, BasePriceRon = 120 },
-                new() { Name = "VetPlus Center", Address = "Str. Memorandumului 9", City = "Cluj-Napoca", PhoneNumber="0743 883 221", Website="vetplus.ro", Rating = 4.8, DistanceKm = 2.5, BasePriceRon = 140 },
-                new() { Name = "MiauWoof Care", Address = "Bd. Eroilor 48", City = "Cluj-Napoca", PhoneNumber="0752 667 991", Website="miauwow.ro", Rating = 4.9, DistanceKm = 1.7, BasePriceRon = 150 },
-                new() { Name = "ABC Pet Clinic", Address = "Str. Universității 21", City = "Cluj-Napoca", PhoneNumber="0728 552 120", Website="abcpetclinic.ro", Rating = 4.3, DistanceKm = 4.3, BasePriceRon = 110 },
-                new() { Name = "PetLife Medical", Address = "Str. București 100", City = "Cluj-Napoca", PhoneNumber="0758 303 919", Website="petlife.ro", Rating = 4.5, DistanceKm = 6.1, BasePriceRon = 135 },
-                new() { Name = "RoyalVets", Address = "Str. Câmpului 9", City = "Cluj-Napoca", PhoneNumber="0733 200 890", Website="royalvets.ro", Rating = 4.8, DistanceKm = 5.0, BasePriceRon = 155 },
-                new() { Name = "PetDoctor Clinic", Address = "Str. Primăverii 78", City = "Cluj-Napoca", PhoneNumber="0749 982 112", Website="petdoctor.ro", Rating = 4.4, DistanceKm = 3.9, BasePriceRon = 118 },
-                new() { Name = "Animavet Medical Center", Address = "Str. Florilor 12", City = "Cluj-Napoca", PhoneNumber="0763 202 392", Website="animavet.ro", Rating = 4.5, DistanceKm = 2.3, BasePriceRon = 130 },
-                new() { Name = "GreenPaws Veterinary", Address = "Str. Morii 2", City = "Cluj-Napoca", PhoneNumber="0738 903 113", Website="greenpaws.ro", Rating = 4.6, DistanceKm = 2.8, BasePriceRon = 145 },
-                new() { Name = "Doggo Diagnostics", Address = "Str. Observatorului 31", City = "Cluj-Napoca", PhoneNumber="0799 199 111", Website="doggodiag.ro", Rating = 4.7, DistanceKm = 3.5, BasePriceRon = 160 },
-                new() { Name = "Feline Focus", Address = "Str. Ciobanului 3", City = "Cluj-Napoca", PhoneNumber="0712 333 908", Website="felinefocus.ro", Rating = 4.9, DistanceKm = 4.9, BasePriceRon = 170 },
-                new() { Name = "Cat & Dog Health", Address = "Str. Culturii 5", City = "Cluj-Napoca", PhoneNumber="0720 805 002", Website="catdoghealth.ro", Rating = 4.2, DistanceKm = 6.7, BasePriceRon = 115 },
-                new() { Name = "PetWell Center", Address = "Str. Avram Iancu 234", City = "Cluj-Napoca", PhoneNumber="0737 445 908", Website="petwellcenter.ro", Rating = 4.6, DistanceKm = 4.4, BasePriceRon = 138 },
-                new() { Name = "Animalia Vet", Address = "Str. Jupiter 47", City = "Cluj-Napoca", PhoneNumber="0762 551 999", Website="animalia.ro", Rating = 4.3, DistanceKm = 7.2, BasePriceRon = 125 },
-                new() { Name = "Companion Care Clinic", Address = "Str. Someșului 13", City = "Cluj-Napoca", PhoneNumber="0744 230 113", Website="companioncare.ro", Rating = 4.8, DistanceKm = 3.8, BasePriceRon = 150 }
+                new() { Name = "HappyPaws Clinic", Address = "Str. Mihai Eminescu 15", City = "Cluj-Napoca", PhoneNumber = "0721 111 222", Website = "happypaws.ro", Rating = 4.7, DistanceKm = 3.2 },
+                new() { Name = "VetPlus Center", Address = "Str. Memorandumului 9", City = "Cluj-Napoca", PhoneNumber = "0743 883 221", Website = "vetplus.ro", Rating = 4.8, DistanceKm = 2.5 },
+                new() { Name = "MiauWoof Care", Address = "Bd. Eroilor 48", City = "Cluj-Napoca", PhoneNumber = "0752 667 991", Website = "miauwow.ro", Rating = 4.9, DistanceKm = 1.7 },
+
+                new() { Name = "Bucharest PetCare", Address = "Bd. Unirii 45", City = "București", PhoneNumber = "0722 441 100", Website = "bucharestpetcare.ro", Rating = 4.8, DistanceKm = 4.1 },
+                new() { Name = "Capital Vet Clinic", Address = "Calea Victoriei 120", City = "București", PhoneNumber = "0731 882 441", Website = "capitalvet.ro", Rating = 4.6, DistanceKm = 5.3 },
+                new() { Name = "Urban Tails Medical", Address = "Str. Decebal 18", City = "București", PhoneNumber = "0745 120 330", Website = "urbantails.ro", Rating = 4.7, DistanceKm = 2.9 },
+
+                new() { Name = "TimiVet Center", Address = "Str. Alba Iulia 10", City = "Timișoara", PhoneNumber = "0726 510 210", Website = "timivet.ro", Rating = 4.5, DistanceKm = 3.7 },
+                new() { Name = "PawsMed Timișoara", Address = "Bd. Revoluției 22", City = "Timișoara", PhoneNumber = "0734 700 122", Website = "pawsmedtm.ro", Rating = 4.7, DistanceKm = 2.8 },
+
+                new() { Name = "Iași Animal Clinic", Address = "Str. Palat 7", City = "Iași", PhoneNumber = "0751 909 444", Website = "iasianimal.ro", Rating = 4.6, DistanceKm = 3.1 },
+                new() { Name = "Moldova VetCare", Address = "Bd. Ștefan cel Mare 32", City = "Iași", PhoneNumber = "0748 300 991", Website = "moldovavet.ro", Rating = 4.4, DistanceKm = 4.6 },
+
+                new() { Name = "Brașov Pet Health", Address = "Str. Lungă 55", City = "Brașov", PhoneNumber = "0729 440 220", Website = "brasovpethealth.ro", Rating = 4.8, DistanceKm = 2.2 },
+                new() { Name = "Carpathian Vet", Address = "Str. Zizinului 14", City = "Brașov", PhoneNumber = "0760 231 881", Website = "carpathianvet.ro", Rating = 4.6, DistanceKm = 3.9 },
+
+                new() { Name = "Constanța VetLife", Address = "Bd. Mamaia 88", City = "Constanța", PhoneNumber = "0732 100 880", Website = "constanta-vetlife.ro", Rating = 4.5, DistanceKm = 5.1 },
+                new() { Name = "SeaSide Animal Care", Address = "Str. Mircea cel Bătrân 40", City = "Constanța", PhoneNumber = "0740 662 111", Website = "seasideanimal.ro", Rating = 4.7, DistanceKm = 2.7 },
+
+                new() { Name = "Oradea Vet Clinic", Address = "Str. Republicii 19", City = "Oradea", PhoneNumber = "0755 332 900", Website = "oradeavet.ro", Rating = 4.6, DistanceKm = 3.4 },
+                new() { Name = "Sibiu Animal Health", Address = "Str. Tribunei 11", City = "Sibiu", PhoneNumber = "0724 800 155", Website = "sibiuanimal.ro", Rating = 4.7, DistanceKm = 2.6 },
+                new() { Name = "Craiova Pet Clinic", Address = "Calea București 70", City = "Craiova", PhoneNumber = "0739 920 411", Website = "craiovapet.ro", Rating = 4.4, DistanceKm = 4.8 },
+                new() { Name = "Galați VetPoint", Address = "Str. Domnească 60", City = "Galați", PhoneNumber = "0741 778 220", Website = "galativetpoint.ro", Rating = 4.5, DistanceKm = 3.5 }
             };
 
             var existingNames = await database.VetCabinets
@@ -166,33 +114,221 @@ namespace PawPoint.ApiServices.Helpers
                 .ToList();
 
             if (toInsert.Count > 0)
-            {
                 await database.VetCabinets.AddRangeAsync(toInsert);
+        }
+
+        private static async TaskThreading SeedVetServicePrices(Context database)
+        {
+            var cabinets = await database.VetCabinets.ToListAsync();
+
+            foreach (var cabinet in cabinets)
+            {
+                var modifier = cabinet.City switch
+                {
+                    "București" => 1.25m,
+                    "Cluj-Napoca" => 1.15m,
+                    "Timișoara" => 1.10m,
+                    "Constanța" => 1.10m,
+                    "Iași" => 1.05m,
+                    "Brașov" => 1.05m,
+                    _ => 1.00m
+                };
+
+                decimal P(decimal basePrice) => Math.Round(basePrice * modifier, 2);
+
+                var services = new List<VetServicePrice>
+                {
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Consultation",
+                        Price = P(16 + (cabinet.Id % 8)),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Deworming",
+                        DewormingType = DewormingTypeEnum.Internal,
+                        Price = P(12),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Deworming",
+                        DewormingType = DewormingTypeEnum.External,
+                        Price = P(15),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Deworming",
+                        DewormingType = DewormingTypeEnum.Combined,
+                        Price = P(22),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Deworming",
+                        DewormingType = DewormingTypeEnum.Control,
+                        Price = P(8),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.Rabies,
+                        Price = P(25),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.DHPPi,
+                        Price = P(35),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.Leptospirosis,
+                        Price = P(30),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.Bordetella,
+                        Price = P(32),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.LymeDisease,
+                        Price = P(36),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.CanineInfluenza,
+                        Price = P(34),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.FelineTrivalent,
+                        Price = P(33),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.FeLV,
+                        Price = P(38),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.FIV,
+                        Price = P(40),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.FelineChlamydia,
+                        Price = P(31),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.Myxomatosis,
+                        Price = P(20),
+                        Currency = Currency.Eur
+                    },
+
+                    new()
+                    {
+                        VetCabinetId = cabinet.Id,
+                        ServiceType = "Vaccination",
+                        VaccineType = VaccineType.RHD,
+                        Price = P(22),
+                        Currency = Currency.Eur
+                    }
+                };
+
+                foreach (var service in services)
+                {
+                    var exists = await database.VetServicePrices.AnyAsync(x =>
+                        x.VetCabinetId == service.VetCabinetId &&
+                        x.ServiceType == service.ServiceType &&
+                        x.DewormingType == service.DewormingType &&
+                        x.VaccineType == service.VaccineType);
+
+                    if (!exists)
+                    {
+                        database.VetServicePrices.Add(service);
+                    }
+                }
             }
+
+            await database.SaveChangesAsync();
         }
 
         private static async TaskThreading SeedVetTimeSlots(Context database)
         {
             const int MaxTotalSlots = 200;
 
-            // dacă avem deja 200 sau mai multe, nu mai facem nimic
             var existingCount = await database.VetTimeSlots.CountAsync();
             if (existingCount >= MaxTotalSlots)
                 return;
 
             var cabinets = await database.VetCabinets.ToListAsync();
-            if (cabinets.Count == 0) return;
+            if (cabinets.Count == 0)
+                return;
 
             var rng = new Random();
-
-            // nu mai mergem 3 luni, ca să nu fie super risipit
             var nowDate = DateTime.UtcNow.Date;
             var endDate = nowDate.AddMonths(1);
 
             var newSlots = new List<VetTimeSlot>();
             var usedKeys = new HashSet<string>();
 
-            var totalSlots = existingCount; // de obicei 0 după ce ai șters
+            var totalSlots = existingCount;
 
             for (var date = nowDate; date < endDate && totalSlots < MaxTotalSlots; date = date.AddDays(1))
             {
@@ -201,20 +337,23 @@ namespace PawPoint.ApiServices.Helpers
                     if (totalSlots >= MaxTotalSlots)
                         break;
 
-                    // ~50% din cabinete vor avea program în ziua asta
                     if (rng.NextDouble() >= 0.5)
                         continue;
 
-                    var slotsPerDay = rng.Next(1, 4); // 1–3 sloturi / cabinet / zi
+                    var slotsPerDay = rng.Next(1, 4);
 
                     for (int i = 0; i < slotsPerDay && totalSlots < MaxTotalSlots; i++)
                     {
-                        var hour = rng.Next(8, 18);        // 8–17
-                        var minute = rng.Next(0, 2) * 30;  // 0 sau 30
+                        var hour = rng.Next(8, 18);
+                        var minute = rng.Next(0, 2) * 30;
 
                         var startLocal = new DateTime(
-                            date.Year, date.Month, date.Day,
-                            hour, minute, 0,
+                            date.Year,
+                            date.Month,
+                            date.Day,
+                            hour,
+                            minute,
+                            0,
                             DateTimeKind.Local);
 
                         var startUtc = startLocal.ToUniversalTime();
@@ -244,9 +383,72 @@ namespace PawPoint.ApiServices.Helpers
             }
 
             if (newSlots.Count > 0)
-            {
                 await database.VetTimeSlots.AddRangeAsync(newSlots);
-            }
+        }
+
+        private static async TaskThreading SeedNotificationPreferences(Context database)
+        {
+            var notificationPreferences = new List<NotificationPreference>
+            {
+                new NotificationPreference { Name = "All" },
+                new NotificationPreference { Name = "InvitesOnly" },
+                new NotificationPreference { Name = "Mute" }
+            };
+
+            await database.NotificationPreferences.AddRangeAsync(notificationPreferences);
+        }
+
+        private static async TaskThreading SeedVerificationTokenTypes(Context database)
+        {
+            var verificationTokenTypes = new List<VerificationTokenType>
+            {
+                new VerificationTokenType { Name = "ForgotPasswordToken" },
+                new VerificationTokenType { Name = "EmailVerificationToken" }
+            };
+
+            await database.VerificationTokenTypes.AddRangeAsync(verificationTokenTypes);
+        }
+
+        private static async TaskThreading SeedNotificationTypes(Context database)
+        {
+            if (await database.NotificationTypes.AnyAsync())
+                return;
+
+            var notificationTypes = new List<NotificationType>
+            {
+                new NotificationType { Id = 1, Name = "AppointmentBooked" },
+                new NotificationType { Id = 2, Name = "AppointmentReminder" },
+                new NotificationType { Id = 3, Name = "AppointmentRescheduled" },
+                new NotificationType { Id = 4, Name = "AppointmentCancelled" },
+
+                new NotificationType { Id = 10, Name = "VaccinationBooked" },
+                new NotificationType { Id = 11, Name = "VaccinationReminder" },
+                new NotificationType { Id = 12, Name = "VaccinationDue" },
+                new NotificationType { Id = 13, Name = "VaccinationUpdated" },
+                new NotificationType { Id = 14, Name = "VaccinationCancelled" },
+
+                new NotificationType { Id = 20, Name = "DewormingBooked" },
+                new NotificationType { Id = 21, Name = "DewormingReminder" },
+                new NotificationType { Id = 22, Name = "DewormingDue" },
+                new NotificationType { Id = 23, Name = "DewormingUpdated" },
+                new NotificationType { Id = 24, Name = "DewormingCancelled" },
+
+                new NotificationType { Id = 30, Name = "FeedingReminder" },
+
+                new NotificationType { Id = 40, Name = "AnimalCreated" },
+                new NotificationType { Id = 41, Name = "AnimalUpdated" },
+                new NotificationType { Id = 42, Name = "AnimalDeleted" },
+
+                new NotificationType { Id = 50, Name = "ProfileUpdated" },
+                new NotificationType { Id = 51, Name = "PasswordChanged" },
+                new NotificationType { Id = 52, Name = "SettingsUpdated" },
+
+                new NotificationType { Id = 60, Name = "ContactMessageReceived" },
+                new NotificationType { Id = 61, Name = "ContactMessageReplyReceived" }
+            };
+
+            await database.NotificationTypes.AddRangeAsync(notificationTypes);
+            await database.SaveChangesAsync();
         }
 
         private static async TaskThreading EnsureAdminUserAsync(

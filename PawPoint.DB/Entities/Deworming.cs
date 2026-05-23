@@ -13,17 +13,18 @@ namespace PawPoint.DB.Entities
 
         public DewormingTypeEnum Type { get; set; }
 
-        public DateTime Date { get; set; }                 // data deparazitării
+        public DateTime Date { get; set; }                
 
-        public int IntervalDays { get; set; }              // la câte zile se repetă
-
-        public DateTime? NextDate { get; set; }            // data următoare
+        public DateTime? NextDate { get; set; }           
 
         public int VetCabinetId { get; set; }
         public VetCabinet VetCabinet { get; set; } = null!;
 
         public int VetTimeSlotId { get; set; }
         public VetTimeSlot VetTimeSlot { get; set; } = null!;
+
+        public decimal? Price { get; set; }
+        public Currency Currency { get; set; } = Currency.Eur;
 
         [MaxLength(500)]
         public string? Notes { get; set; }

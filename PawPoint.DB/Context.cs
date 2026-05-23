@@ -25,7 +25,7 @@ namespace PawPoint.DB
         public DbSet<ContactMessageReply> ContactMessageReplies => Set<ContactMessageReply>();
         public DbSet<AssistantConversation> AssistantConversations => Set<AssistantConversation>();
         public DbSet<AssistantMessage> AssistantMessages => Set<AssistantMessage>();
-
+        public DbSet<VetServicePrice> VetServicePrices => Set<VetServicePrice>();
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -156,6 +156,21 @@ namespace PawPoint.DB
             // index util pentru mesajele din conversație
             modelBuilder.Entity<AssistantMessage>()
                 .HasIndex(m => new { m.ConversationId, m.CreatedAtUtc });
+
+            modelBuilder.Entity<VetCabinet>()
+                .HasMany(c => c.ServicePrices)
+                .WithOne(p => p.VetCabinet)
+                .HasForeignKey(p => p.VetCabinetId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<VetServicePrice>()
+                .HasIndex(p => new
+                {
+                    p.VetCabinetId,
+                    p.ServiceType,
+                    p.DewormingType,
+                    p.VaccineType
+                });
         }
     }
 }

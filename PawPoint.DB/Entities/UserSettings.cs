@@ -11,6 +11,8 @@ namespace PawPoint.DB.Entities
 
         public bool DarkMode { get; set; } = false;
 
+        public string Currency { get; set; } = "EUR";
+
         [MaxLength(20)]
         public string TextSize { get; set; } = "Medium"; 
 

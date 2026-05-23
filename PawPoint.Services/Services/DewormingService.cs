@@ -74,9 +74,6 @@ namespace PawPoint.Services.Services
             if (request.VetCabinetId <= 0) throw new ArgumentException("VetCabinetId is required.");
             if (request.VetTimeSlotId <= 0) throw new ArgumentException("VetTimeSlotId is required.");
 
-            if (request.IntervalDays <= 0)
-                throw new ArgumentException("IntervalDays must be > 0.");
-
             var animal = await _db.Animals
                 .FirstOrDefaultAsync(a => a.Id == request.AnimalId && a.UserId == userId);
 
@@ -101,10 +98,20 @@ namespace PawPoint.Services.Services
             if (slot.BookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected slot is full.");
 
+            if (slot.StartTimeUtc <= DateTime.UtcNow)
+                throw new InvalidOperationException("You can only book future slots.");
+
+            var price = await _db.VetServicePrices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.VetCabinetId == cabinet.Id &&
+                    p.ServiceType == "Deworming" &&
+                    p.DewormingType == request.Type);
+
             slot.BookedCount += 1;
 
             var dateUtc = slot.StartTimeUtc;
-            var nextDateUtc = dateUtc.AddDays(request.IntervalDays);
+            var nextDateUtc = dateUtc.AddDays(GetDefaultIntervalDays(request.Type));
 
             var entity = new Deworming
             {
@@ -113,8 +120,9 @@ namespace PawPoint.Services.Services
                 VetCabinetId = cabinet.Id,
                 VetTimeSlotId = slot.Id,
                 Date = dateUtc,
-                IntervalDays = request.IntervalDays,
                 NextDate = nextDateUtc,
+                Price = price?.Price,
+                Currency = price?.Currency ?? Currency.Eur,
                 Notes = request.Notes?.Trim()
             };
 
@@ -149,11 +157,19 @@ namespace PawPoint.Services.Services
             return Map(created);
         }
 
-        public async Task<DewormingResponse> UpdateAsync(int userId, int dewormingId, UpdateDewormingRequest request)
+        public async Task<DewormingResponse> UpdateAsync(
+    int userId,
+    int dewormingId,
+    UpdateDewormingRequest request)
         {
-            if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
-            if (dewormingId <= 0) throw new ArgumentOutOfRangeException(nameof(dewormingId));
-            if (request is null) throw new ArgumentNullException(nameof(request));
+            if (userId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(userId));
+
+            if (dewormingId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(dewormingId));
+
+            if (request is null)
+                throw new ArgumentNullException(nameof(request));
 
             var entity = await _db.Dewormings
                 .Include(d => d.Animal)
@@ -167,19 +183,76 @@ namespace PawPoint.Services.Services
             if (entity.Animal.UserId != userId)
                 throw new UnauthorizedAccessException("Not allowed.");
 
+            if (request.AnimalId.HasValue && request.AnimalId.Value != entity.AnimalId)
+            {
+                var animal = await _db.Animals.FirstOrDefaultAsync(a =>
+                    a.Id == request.AnimalId.Value &&
+                    a.UserId == userId &&
+                    !a.IsDeleted);
+
+                if (animal is null)
+                    throw new KeyNotFoundException("Animal not found for current user.");
+
+                entity.AnimalId = animal.Id;
+                entity.Animal = animal;
+            }
+
             if (request.Type.HasValue)
                 entity.Type = request.Type.Value;
 
-            if (request.IntervalDays.HasValue)
+            if (request.VetTimeSlotId.HasValue &&
+                request.VetTimeSlotId.Value != entity.VetTimeSlotId)
             {
-                if (request.IntervalDays.Value <= 0)
-                    throw new ArgumentException("IntervalDays must be > 0.");
+                var newSlot = await _db.VetTimeSlots
+                    .Include(s => s.VetCabinet)
+                    .FirstOrDefaultAsync(s => s.Id == request.VetTimeSlotId.Value);
 
-                entity.IntervalDays = request.IntervalDays.Value;
-                entity.NextDate = entity.Date.AddDays(entity.IntervalDays);
+                if (newSlot is null)
+                    throw new KeyNotFoundException("Selected time slot not found.");
+
+                if (request.VetCabinetId.HasValue &&
+                    newSlot.VetCabinetId != request.VetCabinetId.Value)
+                    throw new InvalidOperationException("Selected time slot does not belong to selected cabinet.");
+
+                if (newSlot.StartTimeUtc <= DateTime.UtcNow)
+                    throw new InvalidOperationException("You can only book future slots.");
+
+                if (newSlot.BookedCount >= newSlot.Capacity)
+                    throw new InvalidOperationException("Selected slot is full.");
+
+                entity.VetTimeSlot.BookedCount =
+                    Math.Max(0, entity.VetTimeSlot.BookedCount - 1);
+
+                newSlot.BookedCount += 1;
+
+                entity.VetTimeSlotId = newSlot.Id;
+                entity.VetTimeSlot = newSlot;
+
+                entity.VetCabinetId = newSlot.VetCabinetId;
+                entity.VetCabinet = newSlot.VetCabinet;
+
+                entity.Date = newSlot.StartTimeUtc;
+            }
+            else if (request.VetCabinetId.HasValue &&
+                     request.VetCabinetId.Value != entity.VetCabinetId)
+            {
+                throw new InvalidOperationException("To change the cabinet, select a new time slot from that cabinet.");
             }
 
-            entity.Notes = request.Notes?.Trim();
+            entity.NextDate = entity.Date.AddDays(GetDefaultIntervalDays(entity.Type));
+
+            var price = await _db.VetServicePrices
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p =>
+                    p.VetCabinetId == entity.VetCabinetId &&
+                    p.ServiceType == "Deworming" &&
+                    p.DewormingType == entity.Type);
+
+            entity.Price = price?.Price;
+            entity.Currency = price?.Currency ?? Currency.Eur;
+
+            if (request.Notes is not null)
+                entity.Notes = request.Notes.Trim();
 
             await _db.SaveChangesAsync();
 
@@ -248,17 +321,30 @@ namespace PawPoint.Services.Services
                 d.Id,
                 d.AnimalId,
                 d.Animal.Name,
-                d.Type.ToString(),
+                d.Type,
                 d.Date,
-                d.IntervalDays,
                 d.NextDate,
                 d.VetCabinetId,
                 d.VetCabinet.Name,
                 d.VetTimeSlotId,
                 d.VetTimeSlot.StartTimeUtc,
                 d.VetTimeSlot.EndTimeUtc,
+                d.Price,
+                d.Currency,
                 d.Notes
             );
+
+        private static int GetDefaultIntervalDays(DewormingTypeEnum type)
+        {
+            return type switch
+            {
+                DewormingTypeEnum.Internal => 90,
+                DewormingTypeEnum.External => 30,
+                DewormingTypeEnum.Combined => 90,
+                DewormingTypeEnum.Control => 14,
+                _ => 90
+            };
+        }
 
         private async Task ScheduleDewormingRemindersAsync(
             int userId,

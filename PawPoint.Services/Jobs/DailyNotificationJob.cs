@@ -68,7 +68,7 @@ namespace PawPoint.Services.Jobs
                     v.Animal.UserId,
                     VaccinationId = v.Id,
                     AnimalName = v.Animal.Name,
-                    v.VaccineName,
+                    VaccineName = v.VaccineType.ToString(),
                     NextDate = v.NextDate!.Value
                 })
                 .ToListAsync();

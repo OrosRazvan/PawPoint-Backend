@@ -24,7 +24,7 @@ namespace PawPoint.DB.Entities
 
         public double Rating { get; set; } = 0;        // ex: 4.6
         public double DistanceKm { get; set; } = 0;    // ex: 3.1
-        public decimal BasePriceRon { get; set; } = 0; // ex: 110 lei
+        public ICollection<VetServicePrice> ServicePrices { get; set; } = [];
 
         public ICollection<VetTimeSlot> TimeSlots { get; set; } = [];
         public ICollection<Appointment> Appointments { get; set; } = [];

@@ -5,6 +5,7 @@
         string? TextSize,
         string? WeightUnit,
         string? DateFormat,
+        string? Currency,
         bool? EnableNotifications,
         bool? VaccinationNotifications,
         bool? AppointmentNotifications,

@@ -1,9 +1,12 @@
-﻿namespace PawPoint.Services.Requests
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Requests
 {
     public sealed class CreateVaccinationRequest
     {
         public int AnimalId { get; set; }
-        public required string VaccineName { get; set; }
+
+        public VaccineType VaccineType { get; set; }
 
         public int VetCabinetId { get; set; }
         public int VetTimeSlotId { get; set; }

@@ -37,7 +37,8 @@ namespace PawPoint.ApiServices.Controllers
             [FromQuery] DateOnly from,
             [FromQuery] DateOnly to)
         {
-            var result = await _appointmentService.GetAvailabilityAsync(vetCabinetId, from, to);
+            var userId = GetUserIdFromToken();
+            var result = await _appointmentService.GetAvailabilityAsync(userId, vetCabinetId, from, to);
             return Ok(result);
         }
 

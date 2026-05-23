@@ -1,18 +1,21 @@
-﻿namespace PawPoint.Services.Responses
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Responses
 {
     public sealed record DewormingResponse(
-    int Id,
-    int AnimalId,
-    string AnimalName,
-    string Type,
-    DateTime DateUtc,
-    int IntervalDays,
-    DateTime? NextDateUtc,
-    int VetCabinetId,
-    string VetCabinetName,
-    int VetTimeSlotId,
-    DateTime SlotStartUtc,
-    DateTime SlotEndUtc,
-    string? Notes
+        int Id,
+        int AnimalId,
+        string AnimalName,
+        DewormingTypeEnum Type,
+        DateTime DateUtc,
+        DateTime? NextDateUtc,
+        int VetCabinetId,
+        string VetCabinetName,
+        int VetTimeSlotId,
+        DateTime SlotStartUtc,
+        DateTime SlotEndUtc,
+        decimal? Price,
+        Currency Currency,
+        string? Notes
     );
 }

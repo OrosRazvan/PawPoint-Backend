@@ -1,4 +1,6 @@
-﻿namespace PawPoint.Services.Responses
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Responses
 {
     public sealed record AppointmentResponse(
         int Id,
@@ -11,7 +13,8 @@
         DateTime SlotStartTimeUtc,
         DateTime SlotEndTimeUtc,
         string ServiceType,
-        decimal? PriceRon,
+        decimal? Price,
+        Currency Currency,
         string Status,
         bool Notify24hInAdvance
     );

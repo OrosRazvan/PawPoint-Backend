@@ -1,13 +1,16 @@
-﻿namespace PawPoint.Services.Requests
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Requests
 {
     public sealed class UpdateAppointmentRequest
     {
-        // optional – doar dacă userul alege alt slot
         public int? VetTimeSlotId { get; set; }
 
-        public decimal? EstimatedPriceRon { get; set; }
+        public decimal? Price { get; set; }
+        public Currency? Currency { get; set; }
+
         public string? Notes { get; set; }
-        public string? Status { get; set; }    // ex: "Confirmed", "Cancelled", "Rescheduled"
+        public string? Status { get; set; }
         public bool? Notify24hInAdvance { get; set; }
     }
 }

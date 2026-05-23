@@ -1,4 +1,6 @@
-﻿namespace PawPoint.Services.Requests
+﻿using PawPoint.DB.Enums;
+
+namespace PawPoint.Services.Requests
 {
     public sealed class CreateAppointmentRequest
     {
@@ -6,10 +8,11 @@
         public int VetCabinetId { get; set; }
         public int VetTimeSlotId { get; set; }
 
-        // "Consult", "Vaccination", "Deworming" etc.
         public required string ServiceType { get; set; }
 
-        public decimal? EstimatedPriceRon { get; set; }
+        public decimal? Price { get; set; }
+        public Currency Currency { get; set; } = Currency.Eur;
+
         public string? Notes { get; set; }
         public bool Notify24hInAdvance { get; set; }
     }

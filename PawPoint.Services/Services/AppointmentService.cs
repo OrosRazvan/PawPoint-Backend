@@ -17,29 +17,77 @@ namespace PawPoint.Services.Services
             string? serviceType,
             string? sortBy)
         {
-            var query = _db.VetCabinets.AsNoTracking();
+            var normalizedServiceType = serviceType?.Trim() switch
+            {
+                "Consult" => "Consultation",
+                "Consultație" => "Consultation",
+                _ => serviceType?.Trim()
+            };
+
+            var query = _db.VetCabinets
+                .AsNoTracking()
+                .Include(c => c.ServicePrices)
+                .AsQueryable();
 
             query = sortBy?.ToLower() switch
             {
-                "price" => query.OrderBy(c => c.BasePriceRon),
-                "rating" => query.OrderByDescending(c => c.Rating),
+                "price" or "priceasc" => query.OrderBy(c =>
+                    c.ServicePrices
+                        .Where(p =>
+                            string.IsNullOrWhiteSpace(normalizedServiceType) ||
+                            p.ServiceType == normalizedServiceType)
+                        .Select(p => (decimal?)p.Price)
+                        .Min() ?? decimal.MaxValue),
+
+                "pricedesc" => query.OrderByDescending(c =>
+                    c.ServicePrices
+                        .Where(p =>
+                            string.IsNullOrWhiteSpace(normalizedServiceType) ||
+                            p.ServiceType == normalizedServiceType)
+                        .Select(p => (decimal?)p.Price)
+                        .Min() ?? decimal.MinValue),
+
+                "rating" or "ratingdesc" => query.OrderByDescending(c => c.Rating),
+                "ratingasc" => query.OrderBy(c => c.Rating),
                 "distance" => query.OrderBy(c => c.DistanceKm),
                 _ => query.OrderBy(c => c.Name)
             };
 
             var cabinets = await query.ToListAsync();
 
-            return cabinets.Select(c => new VetCabinetListItemResponse(
-                c.Id,
-                c.Name,
-                c.Address,
-                c.City,
-                c.PhoneNumber,
-                c.Website,
-                c.Rating,
-                c.DistanceKm,
-                c.BasePriceRon
-            )).ToList();
+            var allPrices = await _db.VetServicePrices
+                .AsNoTracking()
+                .Select(p => new
+                {
+                    p.VetCabinetId,
+                    p.ServiceType,
+                    p.Price,
+                    p.Currency
+                })
+                .ToListAsync();
+
+            return cabinets.Select(c =>
+            {
+                var servicePrice = c.ServicePrices
+                    .Where(p =>
+                        string.IsNullOrWhiteSpace(normalizedServiceType) ||
+                        p.ServiceType == normalizedServiceType)
+                    .OrderBy(p => p.Price)
+                    .FirstOrDefault();
+
+                return new VetCabinetListItemResponse(
+                    c.Id,
+                    c.Name,
+                    c.Address,
+                    c.City,
+                    c.PhoneNumber ?? string.Empty,
+                    c.Website,
+                    c.Rating,
+                    c.DistanceKm,
+                    servicePrice?.Price,
+                    servicePrice?.Currency ?? Currency.Eur
+                );
+            }).ToList();
         }
 
         public async Task<VetAvailabilityResponse> GetAvailabilityAsync(
@@ -135,12 +183,12 @@ namespace PawPoint.Services.Services
 
         public async Task<IReadOnlyList<AppointmentResponse>> GetAllForUserAsync(int userId)
         {
-            if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
+            if (userId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(userId));
 
             await CleanupOldAppointmentsAsync();
 
-            var nowUtc = DateTime.UtcNow;
-            var cutoff = nowUtc.AddDays(-15);
+            var cutoff = DateTime.UtcNow.AddDays(-15);
 
             var list = await _db.Appointments
                 .AsNoTracking()
@@ -160,6 +208,7 @@ namespace PawPoint.Services.Services
         {
             if (appointmentId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(appointmentId));
+
             if (userId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(userId));
 
@@ -182,8 +231,11 @@ namespace PawPoint.Services.Services
             int userId,
             CreateAppointmentRequest request)
         {
-            if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
-            if (request is null) throw new ArgumentNullException(nameof(request));
+            if (userId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(userId));
+
+            if (request is null)
+                throw new ArgumentNullException(nameof(request));
 
             if (string.IsNullOrWhiteSpace(request.ServiceType))
                 throw new ArgumentException("ServiceType is required.", nameof(request.ServiceType));
@@ -210,20 +262,29 @@ namespace PawPoint.Services.Services
                 throw new InvalidOperationException("Selected time slot does not belong to the specified cabinet.");
 
             var bookedCount = await _db.Appointments
-            .CountAsync(a =>
-                a.VetTimeSlotId == slot.Id &&
-                a.Status != "Cancelled");
+                .CountAsync(a =>
+                    a.VetTimeSlotId == slot.Id &&
+                    a.Status != "Cancelled");
 
             if (bookedCount >= slot.Capacity)
                 throw new InvalidOperationException("Selected time slot is no longer available.");
 
+            var servicePrice = await _db.VetServicePrices
+                .AsNoTracking()
+                .Where(p =>
+                    p.VetCabinetId == cabinet.Id &&
+                    p.ServiceType == request.ServiceType.Trim())
+                .OrderBy(p => p.Price)
+                .FirstOrDefaultAsync();
+
             var appointment = new Appointment
             {
                 AnimalId = animal.Id,
-                VetCabinetId = slot.VetCabinetId,
+                VetCabinetId = cabinet.Id,
                 VetTimeSlotId = slot.Id,
                 ServiceType = request.ServiceType.Trim(),
-                EstimatedPriceRon = request.EstimatedPriceRon ?? cabinet.BasePriceRon,
+                Price = request.Price ?? servicePrice?.Price,
+                Currency = servicePrice?.Currency ?? request.Currency,
                 Notes = request.Notes?.Trim(),
                 Notify24hInAdvance = request.Notify24hInAdvance,
                 Status = "Confirmed",
@@ -253,28 +314,15 @@ namespace PawPoint.Services.Services
                 slot.StartTimeUtc
             );
 
-            return new AppointmentResponse(
-                appointment.Id,
-                animal.Id,
-                animal.Name,
-                cabinet.Id,
-                cabinet.Name,
-                $"{cabinet.Address}, {cabinet.City}",
-                slot.Id,
-                slot.StartTimeUtc,
-                slot.EndTimeUtc,
-                appointment.ServiceType,
-                appointment.EstimatedPriceRon ?? cabinet.BasePriceRon,
-                appointment.Status,
-                appointment.Notify24hInAdvance
-            );
+            return MapAppointment(appointment, animal, cabinet, slot);
         }
 
         public async Task<IReadOnlyList<AppointmentResponse>> GetAnimalPastAppointmentsAsync(
             int animalId,
             int userId)
         {
-            if (animalId <= 0) throw new ArgumentOutOfRangeException(nameof(animalId));
+            if (animalId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(animalId));
 
             await CleanupOldAppointmentsAsync();
 
@@ -295,7 +343,8 @@ namespace PawPoint.Services.Services
             int animalId,
             int userId)
         {
-            if (animalId <= 0) throw new ArgumentOutOfRangeException(nameof(animalId));
+            if (animalId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(animalId));
 
             await CleanupOldAppointmentsAsync();
 
@@ -314,8 +363,11 @@ namespace PawPoint.Services.Services
             int userId,
             UpdateAppointmentRequest request)
         {
-            if (appointmentId <= 0) throw new ArgumentOutOfRangeException(nameof(appointmentId));
-            if (request is null) throw new ArgumentNullException(nameof(request));
+            if (appointmentId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(appointmentId));
+
+            if (request is null)
+                throw new ArgumentNullException(nameof(request));
 
             var appointment = await _db.Appointments
                 .Include(a => a.Animal)
@@ -355,8 +407,11 @@ namespace PawPoint.Services.Services
                 slotChanged = true;
             }
 
-            if (request.EstimatedPriceRon.HasValue)
-                appointment.EstimatedPriceRon = request.EstimatedPriceRon.Value;
+            if (request.Price.HasValue)
+                appointment.Price = request.Price.Value;
+
+            if (request.Currency.HasValue)
+                appointment.Currency = request.Currency.Value;
 
             if (request.Notes is not null)
                 appointment.Notes = request.Notes.Trim();
@@ -400,24 +455,45 @@ namespace PawPoint.Services.Services
             return MapAppointment(updated);
         }
 
-        #region Helpers
-
         private static AppointmentResponse MapAppointment(Appointment a)
-           => new(
-               a.Id,
-               a.AnimalId,
-               a.Animal.Name,
-               a.VetCabinetId,
-               a.VetCabinet.Name,
-               $"{a.VetCabinet.Address}, {a.VetCabinet.City}",
-               a.VetTimeSlotId,
-               a.VetTimeSlot.StartTimeUtc,
-               a.VetTimeSlot.EndTimeUtc,
-               a.ServiceType,
-               a.EstimatedPriceRon ?? a.VetCabinet.BasePriceRon,
-               a.Status,
-               a.Notify24hInAdvance
-           );
+            => new(
+                a.Id,
+                a.AnimalId,
+                a.Animal.Name,
+                a.VetCabinetId,
+                a.VetCabinet.Name,
+                $"{a.VetCabinet.Address}, {a.VetCabinet.City}",
+                a.VetTimeSlotId,
+                a.VetTimeSlot.StartTimeUtc,
+                a.VetTimeSlot.EndTimeUtc,
+                a.ServiceType,
+                a.Price,
+                a.Currency,
+                a.Status,
+                a.Notify24hInAdvance
+            );
+
+        private static AppointmentResponse MapAppointment(
+            Appointment appointment,
+            Animal animal,
+            VetCabinet cabinet,
+            VetTimeSlot slot)
+            => new(
+                appointment.Id,
+                animal.Id,
+                animal.Name,
+                cabinet.Id,
+                cabinet.Name,
+                $"{cabinet.Address}, {cabinet.City}",
+                slot.Id,
+                slot.StartTimeUtc,
+                slot.EndTimeUtc,
+                appointment.ServiceType,
+                appointment.Price,
+                appointment.Currency,
+                appointment.Status,
+                appointment.Notify24hInAdvance
+            );
 
         private IQueryable<Appointment> QueryAnimalAppointments(int animalId, int userId)
         {
@@ -474,7 +550,5 @@ namespace PawPoint.Services.Services
                 slotStartUtc.AddDays(-1)
             );
         }
-
-        #endregion
     }
 }

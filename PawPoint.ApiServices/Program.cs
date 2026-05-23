@@ -18,7 +18,6 @@ using PawPoint.Services;
 using PawPoint.Services.Parsing;
 using PawPoint.Services.Interfaces;
 using PawPoint.Services.Jobs;
-using PawPoint.Services.Parsing;
 using PawPoint.Services.Services;
 using Scalar.AspNetCore;
 using System.Net.Http.Headers;
@@ -216,6 +215,7 @@ public class Program
         builder.Services.AddScoped<IAssistantService, AssistantService>();
         builder.Services.AddScoped<IAssistantDataService, AssistantDataService>();
         builder.Services.AddScoped<IIntentParser, KeywordIntentParser>();
+        builder.Services.AddScoped<IServicePriceService, ServicePriceService>();
 
         builder.Services.AddSingleton<IHubContext<Hub>>(sp =>
             (IHubContext<Hub>)sp.GetRequiredService<IHubContext<NotificationHub>>());
