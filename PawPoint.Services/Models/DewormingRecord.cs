@@ -8,6 +8,7 @@ public class DewormingRecord
     public string? DewormingType { get; set; }
     public DateTime DateGiven { get; set; }
     public DateTime? NextDueDate { get; set; }
+    public DateTime? ScheduledAt { get; set; }
     public int? IntervalDays { get; set; }
     public string? ProductName { get; set; }
     public string? VetName { get; set; }

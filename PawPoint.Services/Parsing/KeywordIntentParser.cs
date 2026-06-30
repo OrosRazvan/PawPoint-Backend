@@ -9,119 +9,126 @@ public class KeywordIntentParser : IIntentParser
     {
         var normalized = Normalize(message);
 
-        var result = new ParsedAssistantIntent
+        var intent = new ParsedAssistantIntent
         {
             OriginalMessage = message,
-            PetName = ExtractPetName(message),
             DaysAhead = ExtractDaysAhead(normalized)
         };
 
-        if (ContainsAny(normalized, "salut", "buna", "bună", "hello", "hey"))
+        if (IsGreeting(normalized))
         {
-            result.IntentType = AssistantIntentType.Greeting;
-            return result;
+            intent.IntentType = AssistantIntentType.Greeting;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "ajutor", "help", "ce poti", "ce poți", "ce stii", "ce știi"))
+        if (ContainsAny(normalized, "ajutor", "help", "ce poti", "what can you"))
         {
-            result.IntentType = AssistantIntentType.Help;
-            return result;
+            intent.IntentType = AssistantIntentType.Help;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "ce animale", "animalele mele", "lista animale", "animale am", "what pets"))
+        if (ContainsAny(normalized,
+            "recomanzi", "recomandare", "recomandari", "sfat", "sfaturi",
+            "recommend", "recommendation", "recommendations", "advice", "suggest"))
         {
-            result.IntentType = AssistantIntentType.ListPets;
-            return result;
+            intent.IntentType = AssistantIntentType.Recommendations;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "programari", "programări", "consultatii", "consultații", "ce urmeaza", "ce urmează", "appointments"))
+        if (ContainsAny(normalized,
+            "ce animale am", "animalele mele", "lista animale", "pets", "my pets", "animals"))
         {
-            result.IntentType = AssistantIntentType.UpcomingAppointments;
-            return result;
+            intent.IntentType = AssistantIntentType.ListPets;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "rezumat", "overview", "dashboard", "situatie generala", "situație generală", "summary"))
+        if (ContainsAny(normalized,
+            "programari", "programare", "consultatie", "consultatii",
+            "appointment", "appointments", "booking", "consultation"))
         {
-            result.IntentType = AssistantIntentType.HealthOverview;
-            return result;
+            intent.IntentType = AssistantIntentType.UpcomingAppointments;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "sfat", "sfaturi", "recomand", "recomandare", "ce imi sugerezi", "ce îmi sugerezi", "recommend"))
+        var asksVaccinations = ContainsAny(normalized,
+            "vaccin", "vaccinare", "vaccinari", "vaccinuri",
+            "vaccination", "vaccinations", "vaccine", "vaccines");
+
+        var asksDewormings = ContainsAny(normalized,
+            "deparazit", "deparazitare", "deparazitari",
+            "deworm", "deworming", "dewormings");
+
+        if (asksVaccinations && asksDewormings)
         {
-            result.IntentType = AssistantIntentType.Recommendations;
-            return result;
+            intent.IntentType = AssistantIntentType.DueItems;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "vaccin", "vaccinare", "vaccination"))
+        if (asksVaccinations)
         {
-            result.IntentType = result.PetName is null
-                ? AssistantIntentType.DueItems
-                : AssistantIntentType.PetVaccinations;
-
-            return result;
+            intent.IntentType = AssistantIntentType.DueVaccinations;
+            return intent;
         }
 
-        if (ContainsAny(normalized, "deparazit", "antiparazitar", "deworm"))
+        if (asksDewormings)
         {
-            result.IntentType = result.PetName is null
-                ? AssistantIntentType.DueItems
-                : AssistantIntentType.PetDewormings;
-
-            return result;
+            intent.IntentType = AssistantIntentType.DueDewormings;
+            return intent;
         }
 
-        if (result.PetName is not null)
+        if (ContainsAny(normalized,
+            "rezumat", "overview", "summary", "general", "stare", "health"))
         {
-            result.IntentType = AssistantIntentType.PetOverview;
-            return result;
+            intent.IntentType = AssistantIntentType.HealthOverview;
+            return intent;
         }
 
-        return result;
+        intent.IntentType = AssistantIntentType.Unknown;
+        return intent;
     }
 
-    private static string Normalize(string input)
+    private static string Normalize(string value)
     {
-        return input.Trim().ToLowerInvariant();
+        return value
+            .Trim()
+            .ToLowerInvariant()
+            .Replace("ă", "a")
+            .Replace("â", "a")
+            .Replace("î", "i")
+            .Replace("ș", "s")
+            .Replace("ş", "s")
+            .Replace("ț", "t")
+            .Replace("ţ", "t");
     }
 
-    private static bool ContainsAny(string input, params string[] keywords)
+    private static bool ContainsAny(string text, params string[] keywords)
     {
-        return keywords.Any(input.Contains);
+        return keywords.Any(text.Contains);
     }
 
-    private static int ExtractDaysAhead(string input)
+    private static bool IsGreeting(string text)
     {
-        if (input.Contains("azi") || input.Contains("today")) return 1;
-        if (input.Contains("maine") || input.Contains("mâine") || input.Contains("tomorrow")) return 2;
-        if (input.Contains("saptamana") || input.Contains("săptămâna") || input.Contains("week")) return 7;
-        if (input.Contains("luna") || input.Contains("month")) return 30;
+        var words = text
+            .Split(' ', '.', ',', '!', '?', ';', ':', '-', '_')
+            .Where(w => !string.IsNullOrWhiteSpace(w));
 
-        var match = Regex.Match(input, @"(\d+)\s*(zile|days)");
-        if (match.Success && int.TryParse(match.Groups[1].Value, out var days))
-            return days;
+        return words.Any(w =>
+            w == "salut" ||
+            w == "buna" ||
+            w == "hello" ||
+            w == "hi" ||
+            w == "hey"
+        );
+    }
+
+    private static int ExtractDaysAhead(string text)
+    {
+        if (text.Contains("saptamana") || text.Contains("week"))
+            return 7;
+
+        if (text.Contains("luna") || text.Contains("month"))
+            return 30;
 
         return 30;
-    }
-
-    private static string? ExtractPetName(string message)
-    {
-        var patterns = new[]
-        {
-            @"pentru\s+([A-ZĂÂÎȘȚ][a-zA-ZăâîșțĂÂÎȘȚ\-]+)",
-            @"despre\s+([A-ZĂÂÎȘȚ][a-zA-ZăâîșțĂÂÎȘȚ\-]+)",
-            @"lui\s+([A-ZĂÂÎȘȚ][a-zA-ZăâîșțĂÂÎȘȚ\-]+)",
-            @"pe\s+([A-ZĂÂÎȘȚ][a-zA-ZăâîșțĂÂÎȘȚ\-]+)",
-            @"for\s+([A-Z][a-zA-Z\-]+)",
-            @"about\s+([A-Z][a-zA-Z\-]+)"
-        };
-
-        foreach (var pattern in patterns)
-        {
-            var match = Regex.Match(message, pattern);
-            if (match.Success)
-                return match.Groups[1].Value.Trim();
-        }
-
-        return null;
     }
 }

@@ -8,6 +8,7 @@ public class VaccinationRecord
     public string? VaccineName { get; set; }
     public DateTime DateGiven { get; set; }
     public DateTime? NextDueDate { get; set; }
+    public DateTime? ScheduledAt { get; set; }
     public string? VetName { get; set; }
     public string? Notes { get; set; }
 }

@@ -13,7 +13,7 @@ namespace PawPoint.Services.Jobs
         {
             var todayUtc = DateTime.UtcNow.Date;
             var tomorrowUtc = todayUtc.AddDays(1);
-            var dueWindowEndUtc = todayUtc.AddDays(7); // schimbă dacă vrei 3/14/etc.
+            var dueWindowEndUtc = todayUtc.AddDays(7); 
 
             var appts = await db.Appointments
                 .AsNoTracking()

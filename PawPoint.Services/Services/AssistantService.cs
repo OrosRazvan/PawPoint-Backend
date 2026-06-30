@@ -36,6 +36,8 @@ public class AssistantService : IAssistantService
             AssistantIntentType.HealthOverview => await HandleHealthOverview(request.UserId, cancellationToken),
             AssistantIntentType.DueItems => await HandleDueItems(request.UserId, cancellationToken),
             AssistantIntentType.Recommendations => await HandleRecommendations(request.UserId, cancellationToken),
+            AssistantIntentType.DueVaccinations => await HandleDueVaccinations(request.UserId, cancellationToken),
+            AssistantIntentType.DueDewormings => await HandleDueDewormings(request.UserId, cancellationToken),
             _ => HandleUnknown()
         };
     }
@@ -578,4 +580,128 @@ public class AssistantService : IAssistantService
             }
         };
     }
+
+    private async Task<AssistantMessageResponse> HandleDueVaccinations(
+    int userId,
+    CancellationToken cancellationToken)
+    {
+        var vaccinations = await _assistantDataService.GetVaccinationsAsync(userId, null, cancellationToken);
+
+        var today = DateTime.UtcNow.Date;
+        var now = DateTime.UtcNow;
+
+        var scheduledVaccinations = vaccinations
+            .Where(v => v.ScheduledAt.HasValue && v.ScheduledAt.Value >= now)
+            .OrderBy(v => v.ScheduledAt)
+            .Take(10)
+            .ToList();
+
+        if (scheduledVaccinations.Any())
+        {
+            return new AssistantMessageResponse
+            {
+                Intent = "DueVaccinations",
+                ReplyKey = "assistant.scheduledVaccinations",
+                ReplyParams = new Dictionary<string, string>
+                {
+                    ["vaccinations"] = string.Join("; ", scheduledVaccinations.Select(v =>
+                        $"{v.PetName} - {v.VaccineName} - {v.ScheduledAt:dd.MM.yyyy HH:mm}"))
+                },
+                Data = scheduledVaccinations,
+                Suggestions = new List<AssistantSuggestionResponse>
+            {
+                new() { Key = "assistant.suggestions.dueDewormings" },
+                new() { Key = "assistant.suggestions.upcomingAppointments" },
+                new() { Key = "assistant.suggestions.recommendations" }
+            }
+            };
+        }
+
+        var dueVaccinations = vaccinations
+            .Where(v => v.NextDueDate.HasValue && v.NextDueDate.Value.Date <= today.AddDays(14))
+            .OrderBy(v => v.NextDueDate)
+            .Take(10)
+            .ToList();
+
+        if (!dueVaccinations.Any())
+        {
+            return new AssistantMessageResponse
+            {
+                Intent = "DueVaccinations",
+                ReplyKey = "assistant.noDueVaccinations"
+            };
+        }
+
+        return new AssistantMessageResponse
+        {
+            Intent = "DueVaccinations",
+            ReplyKey = "assistant.dueVaccinations",
+            ReplyParams = new Dictionary<string, string>
+            {
+                ["vaccinations"] = string.Join("; ", dueVaccinations.Select(v =>
+                    $"{v.PetName} - {v.VaccineName} - {v.NextDueDate:dd.MM.yyyy}"))
+            },
+            Data = dueVaccinations
+        };
+    }
+
+    private async Task<AssistantMessageResponse> HandleDueDewormings(
+    int userId,
+    CancellationToken cancellationToken)
+    {
+        var dewormings = await _assistantDataService.GetDewormingsAsync(userId, null, cancellationToken);
+
+        var today = DateTime.UtcNow.Date;
+        var now = DateTime.UtcNow;
+
+        var scheduledDewormings = dewormings
+            .Where(d => d.ScheduledAt.HasValue && d.ScheduledAt.Value >= now)
+            .OrderBy(d => d.ScheduledAt)
+            .Take(10)
+            .ToList();
+
+        if (scheduledDewormings.Any())
+        {
+            return new AssistantMessageResponse
+            {
+                Intent = "DueDewormings",
+                ReplyKey = "assistant.scheduledDewormings",
+                ReplyParams = new Dictionary<string, string>
+                {
+                    ["dewormings"] = string.Join("; ", scheduledDewormings.Select(d =>
+                        $"{d.PetName} - {d.DewormingType} - {d.ScheduledAt:dd.MM.yyyy}"))
+                },
+                Data = scheduledDewormings
+            };
+        }
+
+        var dueDewormings = dewormings
+            .Where(d => d.NextDueDate.HasValue && d.NextDueDate.Value.Date <= today.AddDays(14))
+            .OrderBy(d => d.NextDueDate)
+            .Take(10)
+            .ToList();
+
+        if (!dueDewormings.Any())
+        {
+            return new AssistantMessageResponse
+            {
+                Intent = "DueDewormings",
+                ReplyKey = "assistant.noDueDewormings"
+            };
+        }
+
+        return new AssistantMessageResponse
+        {
+            Intent = "DueDewormings",
+            ReplyKey = "assistant.dueDewormings",
+            ReplyParams = new Dictionary<string, string>
+            {
+                ["dewormings"] = string.Join("; ", dueDewormings.Select(d =>
+                    $"{d.PetName} - {d.DewormingType} - {d.NextDueDate:dd.MM.yyyy}"))
+            },
+            Data = dueDewormings
+        };
+    }
 }
+
+

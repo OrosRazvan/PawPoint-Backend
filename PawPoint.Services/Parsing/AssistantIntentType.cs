@@ -12,5 +12,7 @@ public enum AssistantIntentType
     PetDewormings = 7,
     HealthOverview = 8,
     DueItems = 9,
-    Recommendations = 10
+    Recommendations = 10,
+    DueVaccinations = 11,
+    DueDewormings = 12
 }
